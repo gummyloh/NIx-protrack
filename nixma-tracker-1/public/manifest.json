@@ -1,0 +1,23 @@
+{
+  "name": "Nixma Project Tracker",
+  "short_name": "Nixma",
+  "description": "Live project schedule status — Nixma Test Solutions",
+  "start_url": "/internal",
+  "display": "standalone",
+  "background_color": "#faf8f3",
+  "theme_color": "#1c2a24",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

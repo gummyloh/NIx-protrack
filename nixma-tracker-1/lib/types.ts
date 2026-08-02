@@ -1,0 +1,91 @@
+export type TaskStatus =
+  | "not_started"
+  | "on_track"
+  | "at_risk"
+  | "delayed"
+  | "completed";
+
+export interface Task {
+  id: number;
+  project_id: string;
+  phase: number;
+  task_no: number;
+  description: string;
+  duration_days: number;
+  planned_start: string; // ISO date -- baseline, frozen
+  planned_finish: string; // ISO date -- baseline, frozen
+  indent_level: number;
+  parent_id: number | null;
+  department: string;
+  is_summary: boolean;
+  is_active: boolean; // whether this task applies to the current project instance
+  assignee: string | null;
+  predecessor_id: number | null;
+  lag_days: number;
+  scheduled_start: string; // ISO date -- current live plan; edited via the Gantt view
+  scheduled_finish: string; // ISO date -- current live plan; edited via the Gantt view
+  // Still present in the database (kept for the cascade's "what really
+  // happened" comparison and for historical data), but no longer exposed
+  // as separate editable fields in the table UI -- Gantt editing sets
+  // actual_finish automatically when percent_complete reaches 100.
+  actual_start: string | null;
+  actual_finish: string | null;
+  percent_complete: number; // 0-100, edited via Gantt
+  status_note: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+export type NoteAudience = "internal" | "client";
+
+export interface MeetingNote {
+  id: string;
+  project_id: string;
+  audience: NoteAudience;
+  title: string;
+  meeting_date: string; // ISO date
+  raw_content: string | null;
+  formatted_content: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Photo {
+  id: string;
+  project_id: string;
+  task_id: number | null;
+  storage_path: string;
+  caption: string | null;
+  taken_by: string | null;
+  taken_date: string;
+  created_at: string;
+}
+
+export interface ProjectRow {
+  id: string;
+  name: string;
+  customer: string;
+  project_code: string | null;
+  kickoff_date: string | null;
+  target_buyoff_date: string | null;
+  target_end_date: string | null;
+  created_at: string;
+}
+
+export const DEPARTMENTS = [
+  "Project Management",
+  "Mechanical",
+  "Electrical",
+  "Software/Controls",
+  "Procurement",
+  "Manufacturing",
+  "Assembly",
+  "Debug & Test",
+  "QA",
+  "Logistics",
+  "Documentation",
+  "Installation",
+] as const;
+
+export type Department = (typeof DEPARTMENTS)[number];
