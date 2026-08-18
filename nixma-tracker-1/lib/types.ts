@@ -55,6 +55,7 @@ export interface Photo {
   id: string;
   project_id: string;
   task_id: number | null;
+  meeting_note_id: string | null;
   storage_path: string;
   caption: string | null;
   taken_by: string | null;

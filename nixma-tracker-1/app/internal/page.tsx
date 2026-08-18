@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Task } from "@/lib/types";
-import { useProjectId, withProject } from "@/lib/useProjectId";
+import { useProjectId } from "@/lib/useProjectId";
 import {
   computeStatus,
   daysBehind,
@@ -153,26 +152,6 @@ export default function Dashboard() {
             {project?.customer}
             {project?.project_code ? ` · ${project.project_code}` : ""}
           </p>
-        </div>
-        <div className="flex gap-4 text-xs font-mono uppercase tracking-wide">
-          <Link href="/internal/projects" className="text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
-            Projects
-          </Link>
-          <Link href={withProject("/internal/photos", projectId)} className="text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
-            Photos
-          </Link>
-          <Link href={withProject("/internal/meetings", projectId)} className="text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
-            Meeting Notes
-          </Link>
-          <Link href={withProject("/internal/board", projectId)} className="text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
-            Board
-          </Link>
-          <Link href={withProject("/internal/tasks", projectId)} className="text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
-            Task table
-          </Link>
-          <Link href={withProject("/internal/gantt", projectId)} className="text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
-            Gantt chart
-          </Link>
         </div>
       </div>
 

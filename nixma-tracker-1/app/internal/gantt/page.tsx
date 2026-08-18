@@ -18,10 +18,22 @@ export default function GanttView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<any>(null);
   const tasksRef = useRef<Task[]>([]); // always-current copy for callbacks/popup
+  // Remembers the horizontal scroll position across chart rebuilds, so an
+  // edit doesn't snap the view back to today. null = first render, let the
+  // chart do its default scroll-to-today.
+  const scrollPosRef = useRef<number | null>(null);
+
+  function getScrollEl(): HTMLElement | null {
+    return (
+      (containerRef.current?.querySelector(".gantt-container") as HTMLElement) ||
+      containerRef.current
+    );
+  }
 
   async function loadTasks() {
     setLoading(true);
     setError(null);
+    scrollPosRef.current = null; // fresh project load → default scroll-to-today
     const { data, error: err } = await supabase
       .from("tasks")
       .select("*")
@@ -48,6 +60,11 @@ export default function GanttView() {
   const today = useMemo(() => new Date(), []);
 
   async function persistCascade(changedTaskId: number, patch: Partial<Task>) {
+    // Capture where the user is looking before the chart rebuilds, so we can
+    // put them right back instead of jumping to today.
+    const scrollEl = getScrollEl();
+    if (scrollEl) scrollPosRef.current = scrollEl.scrollLeft;
+
     setSaving(true);
     setError(null);
 
@@ -133,6 +150,14 @@ export default function GanttView() {
         view_mode_select: true,
         today_button: true,
         readonly_progress: false,
+        // Compact monday.com-style sizing (defaults: bar 30, padding 18,
+        // headers 45/30, week column 140).
+        bar_height: 16,
+        padding: 10,
+        bar_corner_radius: 4,
+        upper_header_height: 34,
+        lower_header_height: 26,
+        column_width: 80,
         on_date_change: (task: any, start: Date, end: Date) => {
           persistCascade(Number(task.id), {
             scheduled_start: start.toISOString().slice(0, 10),
@@ -188,6 +213,16 @@ export default function GanttView() {
           return undefined;
         },
       });
+
+      // Restore the scroll position from before the rebuild (frappe-gantt
+      // scrolls to today during construction; this override runs after).
+      if (scrollPosRef.current != null) {
+        const target = scrollPosRef.current;
+        requestAnimationFrame(() => {
+          const el = getScrollEl();
+          if (el) el.scrollLeft = target;
+        });
+      }
     });
 
     return () => {
@@ -286,6 +321,20 @@ export default function GanttView() {
         .gantt .popup-wrapper .action-btn {
           background-color: var(--accent, #2f6f4f) !important;
           color: white !important;
+        }
+        /* Compact monday.com-style type sizes */
+        .gantt .bar-label {
+          font-size: 10px;
+        }
+        .gantt .lower-text {
+          font-size: 10px;
+        }
+        .gantt .upper-text {
+          font-size: 11px;
+        }
+        .gantt-container .current-date-highlight,
+        .gantt-container .current-upper {
+          font-size: 10px;
         }
       `}</style>
     </main>

@@ -12,7 +12,9 @@ const supabaseAnonKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzenN5ZmZkeHZnZHBidWx1amZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MjU0NTQsImV4cCI6MjA5OTUwMTQ1NH0.yIz4D9vM5TAnRj4WDzwAxRppHu3j85vWsWrqLReQFPc";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: false },
+  // persistSession must be true now that team members sign in with
+  // Supabase Auth — the session lives in localStorage client-side.
+  auth: { persistSession: true, autoRefreshToken: true },
   // This project's tables live in their own "nixma" schema rather than
   // "public", so they don't collide with VelSpec's or PricePoint's tables
   // if this is deployed into one of those existing Supabase projects.

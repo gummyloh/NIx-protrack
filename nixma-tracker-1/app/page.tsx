@@ -11,22 +11,19 @@ export default function Home() {
           <h1 className="text-3xl font-semibold leading-tight">
             Project Tracker
           </h1>
-          <p className="text-sm text-[var(--ink)]/70 mt-2">
-            Liquick GO Pack N Seal &mdash; MH063
-          </p>
         </div>
 
         <div className="grid gap-4">
           <Link
-            href="/internal"
+            href="/login"
             className="block border border-[var(--line)] bg-white/60 rounded-lg p-5 hover:border-[var(--accent)] transition-colors"
           >
             <p className="font-mono text-xs uppercase tracking-wide text-[var(--ink)]/50 mb-1">
               Team
             </p>
-            <p className="text-lg font-medium">Dashboard</p>
+            <p className="text-lg font-medium">Team sign in</p>
             <p className="text-sm text-[var(--ink)]/60 mt-1">
-              Status at a glance, what needs attention, recent updates.
+              Sign in to see all projects, schedules, and internal updates.
             </p>
           </Link>
 

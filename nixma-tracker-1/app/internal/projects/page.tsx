@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { ProjectRow } from "@/lib/types";
 import { withProject, DEFAULT_PROJECT_ID } from "@/lib/useProjectId";
+import { useInternalAuth } from "@/lib/internalAuth";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -21,6 +22,7 @@ function slugify(s: string): string {
 }
 
 export default function ProjectsPage() {
+  const { isAdmin } = useInternalAuth();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,25 +86,21 @@ export default function ProjectsPage() {
     <main className="p-6 md:p-10 max-w-4xl mx-auto">
       <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
         <div>
-          <Link
-            href={withProject("/internal", DEFAULT_PROJECT_ID)}
-            className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 hover:text-[var(--accent)]"
-          >
-            &larr; Dashboard
-          </Link>
-          <h1 className="text-2xl font-semibold mt-1">Projects</h1>
+          <h1 className="text-2xl font-semibold">Projects</h1>
           <p className="text-sm text-[var(--ink)]/60">
-            Every new project starts as a full copy of Liquick GO Pack N Seal&rsquo;s
-            74-task structure, with dates shifted to your new kickoff date.
-            Switch which tasks apply in that project&rsquo;s Task Table afterward.
+            {isAdmin
+              ? "Every new project starts as a full copy of Liquick GO Pack N Seal’s 74-task structure, with dates shifted to your new kickoff date. Switch which tasks apply in that project’s Task Table afterward."
+              : "Projects you've been added to."}
           </p>
         </div>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium h-fit"
-        >
-          {showForm ? "Cancel" : "+ New project"}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium h-fit"
+          >
+            {showForm ? "Cancel" : "+ New project"}
+          </button>
+        )}
       </div>
 
       {error && (

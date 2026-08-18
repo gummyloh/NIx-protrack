@@ -11,8 +11,6 @@ import {
   STATUS_COLOR,
 } from "@/lib/schedule";
 
-const PROJECT_ID = "liquick-go-pack-n-seal";
-
 function fmtNoteDate(iso: string): string {
   const d = new Date(iso + "T12:00:00Z");
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -36,17 +34,24 @@ export default function CustomerView() {
 
   useEffect(() => {
     (async () => {
+      const sessionRes = await fetch("/api/customer-session").then((r) => r.json());
+      if (!sessionRes.ok) {
+        router.replace("/customer/login");
+        return;
+      }
+      const projectId = sessionRes.project_id as string;
+
       const [{ data: taskData }, { data: projectData }, notesRes] = await Promise.all([
         supabase
           .from("tasks")
           .select("*")
-          .eq("project_id", PROJECT_ID)
+          .eq("project_id", projectId)
           .eq("is_active", true)
           .order("id", { ascending: true }),
         supabase
           .from("projects")
           .select("name, customer, project_code, kickoff_date, target_buyoff_date, target_end_date")
-          .eq("id", PROJECT_ID)
+          .eq("id", projectId)
           .single(),
         fetch("/api/customer-meeting-notes").then((r) => r.json()),
       ]);
@@ -55,7 +60,7 @@ export default function CustomerView() {
       setNotes(notesRes.ok ? notesRes.notes : []);
       setLoading(false);
     })();
-  }, []);
+  }, [router]);
 
   const today = useMemo(() => new Date(), []);
   const summary = useMemo(() => summarize(tasks, today), [tasks, today]);

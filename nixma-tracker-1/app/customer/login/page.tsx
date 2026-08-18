@@ -39,8 +39,8 @@ export default function CustomerLogin() {
         </p>
         <h1 className="text-xl font-semibold mb-1">Project status</h1>
         <p className="text-sm text-[var(--ink)]/60 mb-4">
-          Liquick GO Pack N Seal &mdash; enter the access code shared with you
-          to view live progress.
+          Enter the access code shared with you to view your project&rsquo;s
+          live progress.
         </p>
         <input
           type="password"
