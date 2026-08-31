@@ -8,6 +8,7 @@ import {
   computeStatus,
   daysBehind,
   summarize,
+  overallProgress,
   STATUS_LABEL,
   STATUS_COLOR,
 } from "@/lib/schedule";
@@ -60,6 +61,7 @@ export default function Dashboard() {
   const today = useMemo(() => new Date(), []);
   const leaf = useMemo(() => tasks.filter((t) => !t.is_summary), [tasks]);
   const summary = useMemo(() => summarize(tasks, today), [tasks, today]);
+  const progress = useMemo(() => overallProgress(tasks), [tasks]);
 
   const departmentHealth = useMemo(() => {
     const map = new Map<
@@ -157,7 +159,7 @@ export default function Dashboard() {
 
       {/* Hero status band */}
       <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-6">
-        <div className="flex items-baseline justify-between flex-wrap gap-2 mb-4">
+        <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
           <div>
             <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
               Overall status
@@ -168,13 +170,25 @@ export default function Dashboard() {
           </div>
           <div className="text-right">
             <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
-              Progress
+              Overall progress
             </p>
-            <p className="text-xl font-semibold mt-1 font-mono-num">
-              {summary.completed} / {summary.totalTasks} complete
+            <p className="text-3xl font-semibold mt-1 font-mono-num" style={{ color: "var(--accent)" }}>
+              {progress.weightedPercent}%
+            </p>
+            <p className="text-xs text-[var(--ink)]/50 font-mono-num">
+              {summary.completed} / {summary.totalTasks} tasks complete
             </p>
           </div>
         </div>
+        <div className="h-2 bg-[var(--line)] rounded-full overflow-hidden mb-4">
+          <div
+            className="h-full bg-[var(--accent)]"
+            style={{ width: `${progress.weightedPercent}%` }}
+          />
+        </div>
+        <p className="text-xs text-[var(--ink)]/40 mb-4">
+          Weighted by task duration ({progress.totalDurationDays} person-days total) so a 20-day task counts more than a 1-day one &mdash; this is the number to use for payment milestones.
+        </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: "On track", value: summary.onTrack, color: "var(--accent)" },

@@ -7,6 +7,7 @@ import { Task, MeetingNote } from "@/lib/types";
 import {
   computeStatus,
   summarize,
+  overallProgress,
   STATUS_LABEL,
   STATUS_COLOR,
 } from "@/lib/schedule";
@@ -64,6 +65,7 @@ export default function CustomerView() {
 
   const today = useMemo(() => new Date(), []);
   const summary = useMemo(() => summarize(tasks, today), [tasks, today]);
+  const progress = useMemo(() => overallProgress(tasks), [tasks]);
 
   const byDepartment = useMemo(() => {
     const leaf = tasks.filter((t) => !t.is_summary);
@@ -138,13 +140,25 @@ export default function CustomerView() {
           </div>
           <div className="text-right">
             <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
-              Progress
+              Overall progress
             </p>
-            <p className="text-xl font-semibold mt-1 font-mono-num">
+            <p className="text-3xl font-semibold mt-1 font-mono-num" style={{ color: "var(--accent)" }}>
+              {progress.weightedPercent}%
+            </p>
+            <p className="text-xs text-[var(--ink)]/50 font-mono-num">
               {summary.completed} / {summary.totalTasks} tasks complete
             </p>
           </div>
         </div>
+        <div className="h-2 bg-[var(--line)] rounded-full overflow-hidden mt-4 mb-2">
+          <div
+            className="h-full bg-[var(--accent)]"
+            style={{ width: `${progress.weightedPercent}%` }}
+          />
+        </div>
+        <p className="text-xs text-[var(--ink)]/40">
+          Progress is weighted by task duration ({progress.totalDurationDays} person-days across the project), so it reflects actual effort completed rather than a simple task count.
+        </p>
         {summary.mostDelayedTask && (
           <p className="text-sm text-[var(--ink)]/60 mt-3 pt-3 border-t border-[var(--line)]">
             Most attention needed:{" "}

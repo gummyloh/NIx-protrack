@@ -76,6 +76,33 @@ export const STATUS_COLOR: Record<TaskStatus, string> = {
   completed: "#3a5a8c",
 };
 
+export interface OverallProgress {
+  /** Duration-weighted % complete -- a 20-day task counts 20x a 1-day task.
+   * This is the number to use for payment milestones: it can't be skewed by
+   * knocking out a pile of small tasks while the long pole is untouched. */
+  weightedPercent: number;
+  /** Plain average across tasks, unweighted -- shown for reference only. */
+  simplePercent: number;
+  totalDurationDays: number;
+}
+
+export function overallProgress(tasks: Task[]): OverallProgress {
+  const leafTasks = tasks.filter((t) => !t.is_summary && t.is_active);
+  const totalDurationDays = leafTasks.reduce((s, t) => s + t.duration_days, 0);
+  const weightedSum = leafTasks.reduce(
+    (s, t) => s + t.duration_days * t.percent_complete,
+    0
+  );
+  const simpleSum = leafTasks.reduce((s, t) => s + t.percent_complete, 0);
+  return {
+    weightedPercent:
+      totalDurationDays > 0 ? Math.round(weightedSum / totalDurationDays) : 0,
+    simplePercent:
+      leafTasks.length > 0 ? Math.round(simpleSum / leafTasks.length) : 0,
+    totalDurationDays,
+  };
+}
+
 export interface ProjectSummary {
   totalTasks: number;
   completed: number;

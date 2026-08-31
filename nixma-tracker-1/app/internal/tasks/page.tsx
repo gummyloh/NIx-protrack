@@ -8,6 +8,7 @@ import { useProjectId, withProject } from "@/lib/useProjectId";
 import {
   computeStatus,
   summarize,
+  overallProgress,
   STATUS_LABEL,
   STATUS_COLOR,
 } from "@/lib/schedule";
@@ -62,6 +63,7 @@ export default function InternalView() {
 
   const today = useMemo(() => new Date(), []);
   const summary = useMemo(() => summarize(tasks, today), [tasks, today]);
+  const progress = useMemo(() => overallProgress(tasks), [tasks]);
 
   async function updateTask(id: number, patch: Partial<Task>) {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -137,7 +139,7 @@ export default function InternalView() {
         </div>
       )}
 
-      <SummaryCards summary={summary} />
+      <SummaryCards summary={summary} progress={progress} />
 
       <div className="flex items-center gap-4 my-6 flex-wrap">
         <div className="flex items-center gap-3">
@@ -257,8 +259,15 @@ export default function InternalView() {
   );
 }
 
-function SummaryCards({ summary }: { summary: ReturnType<typeof summarize> }) {
+function SummaryCards({
+  summary,
+  progress,
+}: {
+  summary: ReturnType<typeof summarize>;
+  progress: ReturnType<typeof overallProgress>;
+}) {
   const items = [
+    { label: "Overall progress", value: `${progress.weightedPercent}%`, color: "var(--accent)" },
     { label: "Active tasks", value: summary.totalTasks, color: "var(--ink)" },
     { label: "Completed", value: summary.completed, color: "#3a5a8c" },
     { label: "On track", value: summary.onTrack, color: "var(--accent)" },
@@ -266,7 +275,7 @@ function SummaryCards({ summary }: { summary: ReturnType<typeof summarize> }) {
     { label: "Delayed", value: summary.delayed, color: "var(--rust)" },
   ];
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
       {items.map((it) => (
         <div key={it.label} className="border border-[var(--line)] rounded-lg p-3 bg-white/60">
           <div className="text-2xl font-semibold font-mono-num" style={{ color: it.color }}>
