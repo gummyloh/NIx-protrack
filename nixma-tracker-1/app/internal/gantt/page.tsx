@@ -145,8 +145,8 @@ export default function GanttView() {
 
       containerRef.current!.innerHTML = "";
       ganttRef.current = new Gantt(containerRef.current!, ganttTasks, {
-        view_mode: "Week",
-        view_modes: ["Day", "Week", "Month"],
+        view_mode: "Month",
+        view_modes: ["Week", "Month"],
         view_mode_select: true,
         today_button: true,
         readonly_progress: false,
