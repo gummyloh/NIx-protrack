@@ -249,6 +249,12 @@ export default function GanttView() {
         upper_header_height: 34,
         lower_header_height: 26,
         column_width: 80,
+        // Fixed date range instead of frappe-gantt's default dynamic
+        // extend-on-scroll behavior. That default re-renders the whole grid
+        // mid-scroll to stretch the range, which is what was causing the
+        // "date jumps and won't go back" bug -- with a fixed range there's
+        // nothing to jump.
+        infinite_padding: false,
         on_date_change: (task: any, start: Date, end: Date) => {
           const id = Number(task.id);
           if (childrenByParent.has(id)) return; // group bars aren't directly editable
@@ -317,14 +323,38 @@ export default function GanttView() {
         },
       });
 
-      // Restore the scroll position from before the rebuild (frappe-gantt
-      // scrolls to today during construction; this override runs after).
+      // Center the vertical "today" line in the viewport, instead of
+      // frappe-gantt's default of aligning it near the left edge.
+      function centerOnToday() {
+        const el = getScrollEl();
+        const line = containerRef.current?.querySelector(
+          ".current-highlight"
+        ) as HTMLElement | null;
+        if (!el || !line) return;
+        const lineLeft = parseFloat(line.style.left || "0");
+        el.scrollTo({
+          left: lineLeft - el.clientWidth / 2,
+          behavior: "smooth",
+        });
+      }
+
+      // The built-in "Today" button scrolls today to the left edge by
+      // default -- point it at our centering logic instead.
+      if (ganttRef.current?.$today_button) {
+        ganttRef.current.$today_button.onclick = centerOnToday;
+      }
+
+      // Restore the scroll position from before the rebuild (an edit was
+      // made), or -- on a fresh load -- center on today instead of leaving
+      // frappe-gantt's initial left-aligned scroll in place.
       if (scrollPosRef.current != null) {
         const target = scrollPosRef.current;
         requestAnimationFrame(() => {
           const el = getScrollEl();
           if (el) el.scrollLeft = target;
         });
+      } else {
+        requestAnimationFrame(() => requestAnimationFrame(centerOnToday));
       }
     });
 
