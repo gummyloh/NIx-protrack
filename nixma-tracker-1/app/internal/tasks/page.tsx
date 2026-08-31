@@ -82,6 +82,32 @@ export default function InternalView() {
       (showInactive || t.is_active)
   );
 
+  const allVisibleActive =
+    visibleTasks.length > 0 && visibleTasks.every((t) => t.is_active);
+
+  async function updateAllVisible(active: boolean) {
+    const ids = visibleTasks.map((t) => t.id);
+    if (ids.length === 0) return;
+    setTasks((prev) =>
+      prev.map((t) => (ids.includes(t.id) ? { ...t, is_active: active } : t))
+    );
+    setSavingIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+    const { error: err } = await supabase
+      .from("tasks")
+      .update({ is_active: active })
+      .in("id", ids);
+    setSavingIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    if (err) setError(err.message);
+  }
+
   return (
     <main className="p-6 md:p-10 max-w-6xl mx-auto">
       <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
@@ -144,7 +170,21 @@ export default function InternalView() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--line)] text-left text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
-              <th className="p-3 w-16">In use</th>
+              <th className="p-3 w-16">
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleActive}
+                    onChange={(e) => updateAllVisible(e.target.checked)}
+                    title={
+                      allVisibleActive
+                        ? "Deselect all visible tasks"
+                        : "Select all visible tasks"
+                    }
+                  />
+                  <span>In use</span>
+                </div>
+              </th>
               <th className="p-3 min-w-[240px]">Task</th>
               <th className="p-3">Dept</th>
               <th className="p-3 whitespace-nowrap">Planned</th>

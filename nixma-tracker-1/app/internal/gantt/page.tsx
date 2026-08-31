@@ -228,9 +228,12 @@ export default function GanttView() {
           // Group bars don't draw dependency arrows -- those show once you
           // expand into the leaf tasks that actually carry them.
           dependencies: !isGroup && t.predecessor_id ? String(t.predecessor_id) : "",
-          custom_class: `${deptClass(t.department)} status-${status}${
-            isGroup ? " group-row" : ""
-          }`,
+          // frappe-gantt does `classList.add(custom_class)` internally,
+          // which throws on a space-separated string (DOMTokenList.add()
+          // only accepts single tokens). Pass just the department class
+          // here; the status and group-row classes are added manually
+          // right after construction, below.
+          custom_class: deptClass(t.department),
         };
       });
 
@@ -322,6 +325,23 @@ export default function GanttView() {
           return undefined;
         },
       });
+
+      // Add the status and group-row classes to each bar now that it
+      // exists in the DOM (can't pass them via custom_class -- see note
+      // above). classList.add() takes multiple token arguments fine, it
+      // just can't take one space-separated string.
+      for (const { task: t } of visibleTasks) {
+        const kids = childrenByParent.get(t.id);
+        const isGroup = !!kids && kids.length > 0;
+        const status = computeStatus(t, today);
+        const el = containerRef.current?.querySelector(
+          `.bar-wrapper[data-id="${t.id}"]`
+        );
+        if (el) {
+          el.classList.add(`status-${status}`);
+          if (isGroup) el.classList.add("group-row");
+        }
+      }
 
       // Center the vertical "today" line in the viewport, instead of
       // frappe-gantt's default of aligning it near the left edge.
