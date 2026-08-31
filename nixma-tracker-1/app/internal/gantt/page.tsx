@@ -240,7 +240,10 @@ export default function GanttView() {
       containerRef.current!.innerHTML = "";
       ganttRef.current = new Gantt(containerRef.current!, ganttTasks, {
         view_mode: "Month",
-        view_modes: ["Week", "Month"],
+        // frappe-gantt silently forces the default view to whichever mode
+        // is FIRST in this array, overriding view_mode above -- so Month
+        // has to be listed first for the explicit default to actually win.
+        view_modes: ["Month", "Week"],
         view_mode_select: true,
         today_button: true,
         readonly_progress: false,
