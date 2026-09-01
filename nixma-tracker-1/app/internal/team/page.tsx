@@ -28,6 +28,11 @@ interface AddableMember {
   full_name: string | null;
 }
 
+interface ProjectInvite {
+  email: string;
+  created_at: string;
+}
+
 interface ProjectRow {
   name: string;
   customer: string;
@@ -49,6 +54,10 @@ export default function TeamAdmin() {
   const [membersLoading, setMembersLoading] = useState(true);
   const [selectedToAdd, setSelectedToAdd] = useState("");
   const [addingMember, setAddingMember] = useState(false);
+  const [invites, setInvites] = useState<ProjectInvite[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -75,20 +84,26 @@ export default function TeamAdmin() {
 
   async function loadProjectMembers() {
     setMembersLoading(true);
-    const [{ data: projectData }, { data: memberData, error: memberErr }, { data: addableData }] =
-      await Promise.all([
-        supabase
-          .from("projects")
-          .select("name, customer, project_code")
-          .eq("id", projectId)
-          .single(),
-        supabase.rpc("list_project_members", { p_project_id: projectId }),
-        supabase.rpc("list_addable_members", { p_project_id: projectId }),
-      ]);
+    const [
+      { data: projectData },
+      { data: memberData, error: memberErr },
+      { data: addableData },
+      { data: inviteData },
+    ] = await Promise.all([
+      supabase
+        .from("projects")
+        .select("name, customer, project_code")
+        .eq("id", projectId)
+        .single(),
+      supabase.rpc("list_project_members", { p_project_id: projectId }),
+      supabase.rpc("list_addable_members", { p_project_id: projectId }),
+      supabase.rpc("list_project_invites", { p_project_id: projectId }),
+    ]);
     setProject((projectData as ProjectRow) || null);
     if (memberErr) setError(memberErr.message);
     setMembers((memberData as ProjectMember[]) || []);
     setAddable((addableData as AddableMember[]) || []);
+    setInvites((inviteData as ProjectInvite[]) || []);
     setMembersLoading(false);
   }
 
@@ -146,6 +161,43 @@ export default function TeamAdmin() {
     await loadProjectMembers();
   }
 
+  async function inviteByEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setError(null);
+    setInviteMessage(null);
+    const { data, error: err } = await supabase.rpc("invite_project_member", {
+      p_project_id: projectId,
+      p_email: inviteEmail.trim(),
+    });
+    setInviting(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setInviteMessage(
+      data === "added"
+        ? `${inviteEmail.trim()} already had an account -- added to the project right away.`
+        : `${inviteEmail.trim()} doesn't have an account yet -- they'll be added automatically the moment they sign up with that email. Let them know to go to /signup.`
+    );
+    setInviteEmail("");
+    await loadProjectMembers();
+  }
+
+  async function cancelInvite(email: string) {
+    setError(null);
+    const { error: err } = await supabase.rpc("cancel_project_invite", {
+      p_project_id: projectId,
+      p_email: email,
+    });
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    await loadProjectMembers();
+  }
+
   if (loading) {
     return (
       <main className="p-6 md:p-10 max-w-4xl mx-auto">
@@ -195,29 +247,76 @@ export default function TeamAdmin() {
           Members of this project
         </h2>
 
-        <div className="border border-[var(--line)] rounded-lg p-4 bg-white/60 mb-3 flex items-center gap-3 flex-wrap">
-          <select
-            value={selectedToAdd}
-            onChange={(e) => setSelectedToAdd(e.target.value)}
-            className="border border-[var(--line)] rounded px-2 py-1.5 text-sm bg-white flex-1 min-w-[200px]"
-          >
-            <option value="">
-              {addable.length === 0 ? "No approved accounts left to add" : "Choose an account to add…"}
-            </option>
-            {addable.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.full_name || a.email} ({a.email})
-              </option>
-            ))}
-          </select>
+        <form
+          onSubmit={inviteByEmail}
+          className="border border-[var(--line)] rounded-lg p-4 bg-white/60 mb-3 flex items-center gap-3 flex-wrap"
+        >
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder="Add by email — someone@company.com"
+            className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white flex-1 min-w-[220px]"
+          />
           <button
-            onClick={addMember}
-            disabled={!selectedToAdd || addingMember}
-            className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50"
+            type="submit"
+            disabled={!inviteEmail.trim() || inviting}
+            className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50 shrink-0"
           >
-            {addingMember ? "Adding…" : "Add to project"}
+            {inviting ? "Adding…" : "Add by email"}
           </button>
-        </div>
+        </form>
+        {inviteMessage && (
+          <p className="text-xs text-[var(--ink)]/60 mb-3">{inviteMessage}</p>
+        )}
+        <p className="text-xs text-[var(--ink)]/40 mb-4">
+          If they already have an account, they're added right away. If not,
+          this just remembers the email -- they get access automatically the
+          first time they sign up with it, no separate invite email is sent.
+        </p>
+
+        {addable.length > 0 && (
+          <div className="border border-[var(--line)] rounded-lg p-4 bg-white/60 mb-3 flex items-center gap-3 flex-wrap">
+            <select
+              value={selectedToAdd}
+              onChange={(e) => setSelectedToAdd(e.target.value)}
+              className="border border-[var(--line)] rounded px-2 py-1.5 text-sm bg-white flex-1 min-w-[200px]"
+            >
+              <option value="">Or choose an existing account to add…</option>
+              {addable.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.full_name || a.email} ({a.email})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={addMember}
+              disabled={!selectedToAdd || addingMember}
+              className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50"
+            >
+              {addingMember ? "Adding…" : "Add to project"}
+            </button>
+          </div>
+        )}
+
+        {invites.length > 0 && (
+          <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)] mb-3">
+            {invites.map((inv) => (
+              <div key={inv.email} className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-[var(--ink)]/70 truncate">
+                  {inv.email}{" "}
+                  <span className="text-xs text-[var(--ink)]/40">— awaiting sign-up</span>
+                </p>
+                <button
+                  onClick={() => cancelInvite(inv.email)}
+                  className="text-xs underline text-[var(--ink)]/40 hover:text-[var(--rust)] shrink-0"
+                >
+                  Cancel
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {membersLoading ? (
           <p className="text-sm text-[var(--ink)]/50">Loading members…</p>
