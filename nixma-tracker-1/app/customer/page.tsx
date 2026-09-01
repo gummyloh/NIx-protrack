@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { Task, MeetingNote } from "@/lib/types";
 import {
   computeStatus,
@@ -40,24 +39,22 @@ export default function CustomerView() {
         router.replace("/customer/login");
         return;
       }
-      const projectId = sessionRes.project_id as string;
 
-      const [{ data: taskData }, { data: projectData }, notesRes] = await Promise.all([
-        supabase
-          .from("tasks")
-          .select("*")
-          .eq("project_id", projectId)
-          .eq("is_active", true)
-          .order("id", { ascending: true }),
-        supabase
-          .from("projects")
-          .select("name, customer, project_code, kickoff_date, target_buyoff_date, target_end_date")
-          .eq("id", projectId)
-          .single(),
+      // Tasks and project details now come from password-verified server
+      // routes (same pattern as customer-meeting-notes) instead of direct
+      // anon-key table reads, so a leaked anon key alone can't pull any
+      // project's data anymore.
+      const [tasksRes, projectRes, notesRes] = await Promise.all([
+        fetch("/api/customer-tasks").then((r) => r.json()),
+        fetch("/api/customer-project").then((r) => r.json()),
         fetch("/api/customer-meeting-notes").then((r) => r.json()),
       ]);
-      setTasks((taskData as Task[]) || []);
-      setProject(projectData as ProjectRow);
+      if (!tasksRes.ok || !projectRes.ok) {
+        router.replace("/customer/login");
+        return;
+      }
+      setTasks((tasksRes.tasks as Task[]) || []);
+      setProject(projectRes.project as ProjectRow);
       setNotes(notesRes.ok ? notesRes.notes : []);
       setLoading(false);
     })();
