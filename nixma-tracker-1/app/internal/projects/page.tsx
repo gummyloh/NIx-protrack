@@ -181,11 +181,9 @@ export default function ProjectsPage() {
             {creating ? "Creating…" : "Create project"}
           </button>
           <p className="text-xs text-[var(--ink)]/40">
-            Note: the customer-facing password-gated page currently only
-            serves the original Teleflex project -- new projects get a full
-            internal dashboard/tasks/gantt/board/photos/meetings set right
-            away, but wiring up their own customer login page is a follow-on
-            step, not included yet.
+            The customer password set above is this project&apos;s own login
+            for the password-gated status page at /customer/login -- it
+            works right away, no extra setup needed.
           </p>
         </div>
       )}
