@@ -78,6 +78,12 @@ export default function TeamLogin() {
           </button>
         </form>
 
+        <div className="mt-4 text-sm">
+          <Link href="/forgot-password" className="underline text-[var(--ink)]/50 hover:text-[var(--accent)]">
+            Forgot your password?
+          </Link>
+        </div>
+
         <div className="mt-6 flex items-center justify-between text-sm">
           <Link href="/signup" className="underline text-[var(--ink)]/60 hover:text-[var(--accent)]">
             Need an account? Sign up
