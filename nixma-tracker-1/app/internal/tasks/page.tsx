@@ -14,6 +14,7 @@ import {
 } from "@/lib/schedule";
 import { exportTasksPdf } from "@/lib/exportPdf";
 import { useTaskRealtime } from "@/lib/useTaskRealtime";
+import { buildClientSnapshot } from "@/lib/clientSnapshot";
 
 interface TaskHistoryRow {
   id: number;
@@ -75,6 +76,21 @@ export default function InternalView() {
   const { staleNotice, dismissStaleNotice, markLocalWrite } = useTaskRealtime(projectId);
   const [historyTask, setHistoryTask] = useState<Task | null>(null);
   const [historyRows, setHistoryRows] = useState<TaskHistoryRow[] | null>(null);
+  const [publishNote, setPublishNote] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [lastPublished, setLastPublished] = useState<string | null>(null);
+
+  async function loadLastPublished() {
+    const { data } = await supabase
+      .from("client_updates")
+      .select("published_at")
+      .eq("project_id", projectId)
+      .order("published_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setLastPublished((data as { published_at: string } | null)?.published_at ?? null);
+  }
 
   async function loadTasks() {
     setLoading(true);
@@ -94,6 +110,7 @@ export default function InternalView() {
 
   useEffect(() => {
     loadTasks();
+    loadLastPublished();
     supabase
       .from("projects")
       .select("name, customer, project_code")
@@ -181,6 +198,34 @@ export default function InternalView() {
     if (err) setError(err.message);
   }
 
+  // Publishing always reflects the full, project-wide curated set -- every
+  // active, non-summary task currently checked "Client" -- regardless of
+  // whatever search/department/status filters happen to be applied to the
+  // table on screen right now. What the admin is filtering by is just a way
+  // of navigating the table; it should never silently change what the
+  // client ends up seeing.
+  async function handlePublish() {
+    setPublishing(true);
+    setPublishMessage(null);
+    const clientVisible = tasks.filter(
+      (t) => t.show_to_client && t.is_active && !t.is_summary
+    );
+    const snapshot = buildClientSnapshot(clientVisible, today);
+    const { error: err } = await supabase.rpc("publish_client_update", {
+      p_project_id: projectId,
+      p_note: publishNote.trim() || null,
+      p_snapshot: snapshot,
+    });
+    setPublishing(false);
+    if (err) {
+      setPublishMessage(`Couldn't publish: ${err.message}`);
+    } else {
+      setPublishNote("");
+      setPublishMessage(`Published — the client's page now shows this update.`);
+      loadLastPublished();
+    }
+  }
+
   return (
     <main className="p-6 md:p-10 max-w-6xl mx-auto">
       <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
@@ -237,6 +282,44 @@ export default function InternalView() {
       )}
 
       <SummaryCards summary={summary} progress={progress} />
+
+      <div className="mt-6 border border-[var(--line)] rounded-lg p-4 bg-white/60">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+          <div>
+            <h2 className="text-sm font-semibold">Publish update to client</h2>
+            <p className="text-xs text-[var(--ink)]/50 mt-0.5">
+              The client's status page only ever shows the last update you
+              publish here — tick "Client" on the tasks below to include
+              them, then publish. Editing tasks doesn't change what the
+              client sees until you publish again.
+            </p>
+          </div>
+          <span className="text-xs text-[var(--ink)]/40 shrink-0">
+            {lastPublished
+              ? `Last published: ${fmtHistoryTimestamp(lastPublished)}`
+              : "Never published yet"}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            type="text"
+            value={publishNote}
+            onChange={(e) => setPublishNote(e.target.value)}
+            placeholder="Optional note for the client (e.g. what changed)"
+            className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white flex-1 min-w-[220px]"
+          />
+          <button
+            onClick={handlePublish}
+            disabled={publishing}
+            className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90 disabled:opacity-50 shrink-0"
+          >
+            {publishing ? "Publishing…" : "Publish"}
+          </button>
+        </div>
+        {publishMessage && (
+          <p className="text-xs mt-2 text-[var(--ink)]/60">{publishMessage}</p>
+        )}
+      </div>
 
       <div className="flex items-center gap-4 my-6 flex-wrap">
         <input
@@ -314,6 +397,7 @@ export default function InternalView() {
                 </div>
               </th>
               <th className="p-3 min-w-[240px]">Task</th>
+              <th className="p-3 w-16">Client</th>
               <th className="p-3">Dept</th>
               <th className="p-3 whitespace-nowrap">Planned</th>
               <th className="p-3 whitespace-nowrap">Scheduled</th>
@@ -349,6 +433,14 @@ export default function InternalView() {
                     <div className="text-xs text-[var(--ink)]/40 font-mono">
                       #{t.task_no} · Phase {t.phase} · {t.duration_days}d
                     </div>
+                  </td>
+                  <td className="p-3">
+                    <input
+                      type="checkbox"
+                      checked={t.show_to_client}
+                      onChange={(e) => updateTask(t.id, { show_to_client: e.target.checked })}
+                      title="Include this task in the next published client update"
+                    />
                   </td>
                   <td className="p-3 whitespace-nowrap text-xs">{t.department}</td>
                   <td className="p-3 whitespace-nowrap text-xs font-mono-num">

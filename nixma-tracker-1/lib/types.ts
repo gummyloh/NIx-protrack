@@ -34,6 +34,7 @@ export interface Task {
   status_note: string | null;
   updated_by: string | null;
   updated_at: string | null;
+  show_to_client: boolean; // included in the next published client update?
 }
 
 export type NoteAudience = "internal" | "client";

@@ -33,7 +33,9 @@ export default function ProjectsPage() {
   const [customer, setCustomer] = useState("");
   const [projectCode, setProjectCode] = useState("");
   const [kickoffDate, setKickoffDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [customerPassword, setCustomerPassword] = useState("");
+  const [newProjectPin, setNewProjectPin] = useState<{ project_id: string; customer_pin: string } | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [revealedPins, setRevealedPins] = useState<Record<string, string>>({});
 
   async function loadProjects() {
     setLoading(true);
@@ -49,8 +51,8 @@ export default function ProjectsPage() {
   }, []);
 
   async function handleCreate() {
-    if (!name.trim() || !customer.trim() || !customerPassword.trim()) {
-      setError("Project name, customer, and a customer access password are all required.");
+    if (!name.trim() || !customer.trim()) {
+      setError("Project name and customer are required.");
       return;
     }
     const newId = slugify(name);
@@ -60,13 +62,12 @@ export default function ProjectsPage() {
     }
     setCreating(true);
     setError(null);
-    const { error: err } = await supabase.rpc("create_project_from_template", {
+    const { data, error: err } = await supabase.rpc("create_project_from_template", {
       p_new_project_id: newId,
       p_name: name.trim(),
       p_customer: customer.trim(),
       p_project_code: projectCode.trim() || null,
       p_kickoff_date: kickoffDate,
-      p_customer_password: customerPassword.trim(),
       p_source_project_id: DEFAULT_PROJECT_ID,
     });
     setCreating(false);
@@ -74,12 +75,30 @@ export default function ProjectsPage() {
       setError(err.message);
       return;
     }
+    const row = (data as { project_id: string; customer_pin: string }[] | null)?.[0] ?? null;
     setName("");
     setCustomer("");
     setProjectCode("");
-    setCustomerPassword("");
     setShowForm(false);
+    setNewProjectPin(row);
     await loadProjects();
+  }
+
+  async function handleResetPin(projectId: string) {
+    if (!confirm("Reset this project's customer PIN? The old PIN will stop working immediately.")) {
+      return;
+    }
+    setResettingId(projectId);
+    setError(null);
+    const { data, error: err } = await supabase.rpc("reset_customer_pin", {
+      p_project_id: projectId,
+    });
+    setResettingId(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setRevealedPins((prev) => ({ ...prev, [projectId]: data as string }));
   }
 
   return (
@@ -106,6 +125,22 @@ export default function ProjectsPage() {
       {error && (
         <div className="mb-4 text-sm text-[var(--rust)] bg-[var(--rust)]/10 border border-[var(--rust)]/30 rounded px-3 py-2">
           {error}
+        </div>
+      )}
+
+      {newProjectPin && (
+        <div className="mb-4 flex items-center justify-between gap-3 text-sm bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded px-3 py-2">
+          <span>
+            Customer PIN for <span className="font-medium">{newProjectPin.project_id}</span>:{" "}
+            <span className="font-mono-num font-semibold">{newProjectPin.customer_pin}</span> — share
+            this with the customer now, it won&apos;t be shown again.
+          </span>
+          <button
+            onClick={() => setNewProjectPin(null)}
+            className="text-[var(--ink)]/40 hover:text-[var(--ink)]/70 shrink-0"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -162,17 +197,6 @@ export default function ProjectsPage() {
               />
             </div>
           </div>
-          <div>
-            <label className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 block mb-1">
-              Customer access password
-            </label>
-            <input
-              value={customerPassword}
-              onChange={(e) => setCustomerPassword(e.target.value)}
-              placeholder="What the customer will type in to view their status page"
-              className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
-            />
-          </div>
           <button
             onClick={handleCreate}
             disabled={creating}
@@ -181,9 +205,10 @@ export default function ProjectsPage() {
             {creating ? "Creating…" : "Create project"}
           </button>
           <p className="text-xs text-[var(--ink)]/40">
-            The customer password set above is this project&apos;s own login
-            for the password-gated status page at /customer/login -- it
-            works right away, no extra setup needed.
+            A 6-digit access PIN is generated automatically when you create
+            the project -- it&apos;ll be shown once, right here, so you can
+            pass it on to the customer for the login page at /customer/login.
+            You can generate a new one anytime from "Reset PIN" below.
           </p>
         </div>
       )}
@@ -193,24 +218,44 @@ export default function ProjectsPage() {
       ) : (
         <div className="space-y-3">
           {projects.map((p) => (
-            <Link
+            <div
               key={p.id}
-              href={withProject("/internal", p.id)}
-              className="block border border-[var(--line)] rounded-lg p-4 bg-white/60 hover:border-[var(--accent)] transition-colors"
+              className="border border-[var(--line)] rounded-lg p-4 bg-white/60 hover:border-[var(--accent)] transition-colors"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{p.name}</p>
-                  <p className="text-xs text-[var(--ink)]/50">
-                    {p.customer}
-                    {p.project_code ? ` · ${p.project_code}` : ""}
+              <div className="flex items-center justify-between gap-4">
+                <Link
+                  href={withProject("/internal", p.id)}
+                  className="flex-1 flex items-center justify-between gap-4"
+                >
+                  <div>
+                    <p className="font-medium">{p.name}</p>
+                    <p className="text-xs text-[var(--ink)]/50">
+                      {p.customer}
+                      {p.project_code ? ` · ${p.project_code}` : ""}
+                    </p>
+                  </div>
+                  <p className="text-xs text-[var(--ink)]/40 font-mono-num">
+                    Kickoff {fmtDate(p.kickoff_date)}
                   </p>
-                </div>
-                <p className="text-xs text-[var(--ink)]/40 font-mono-num">
-                  Kickoff {fmtDate(p.kickoff_date)}
-                </p>
+                </Link>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleResetPin(p.id)}
+                    disabled={resettingId === p.id}
+                    className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 border border-[var(--line)] rounded px-2 py-1 hover:text-[var(--accent)] hover:border-[var(--accent)] disabled:opacity-50 shrink-0"
+                  >
+                    {resettingId === p.id ? "…" : "Reset PIN"}
+                  </button>
+                )}
               </div>
-            </Link>
+              {revealedPins[p.id] && (
+                <p className="text-xs mt-2 bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded px-2 py-1.5 font-mono-num">
+                  New PIN for {p.customer}:{" "}
+                  <span className="font-semibold">{revealedPins[p.id]}</span> — share this with
+                  them now, it won&apos;t be shown again.
+                </p>
+              )}
+            </div>
           ))}
         </div>
       )}

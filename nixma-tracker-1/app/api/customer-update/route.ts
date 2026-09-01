@@ -4,6 +4,10 @@ import { supabase } from "@/lib/supabase";
 
 const COOKIE_NAME = "nixma_customer_auth";
 
+// Replaces the old customer-tasks route now that the customer page renders
+// a published snapshot instead of live tasks. Same pattern as
+// customer-meeting-notes: the cookie only saves a re-prompt, the RPC
+// re-checks the PIN against the projects table itself.
 export async function GET() {
   const cookieStore = cookies();
   const raw = cookieStore.get(COOKIE_NAME)?.value;
@@ -23,11 +27,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Invalid session" }, { status: 401 });
   }
 
-  // The RPC re-checks the password against the projects table itself --
-  // this route trusts the cookie only to avoid re-prompting, not as the
-  // actual security boundary. Even a forged/stale cookie value can't
-  // retrieve tasks without the real password matching in the database.
-  const { data, error } = await supabase.rpc("get_client_tasks", {
+  const { data, error } = await supabase.rpc("get_latest_client_update", {
     p_project_id: project_id,
     p_password: password,
   });
@@ -36,5 +36,16 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, tasks: data ?? [] });
+  // get_latest_client_update returns a table (0 or 1 rows) -- no rows means
+  // nothing has been published for this project yet, which is a normal
+  // state, not an error.
+  const row = (data as { published_at: string; note: string | null; snapshot: unknown }[])?.[0];
+  if (!row) {
+    return NextResponse.json({ ok: true, update: null });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    update: { published_at: row.published_at, note: row.note, snapshot: row.snapshot },
+  });
 }

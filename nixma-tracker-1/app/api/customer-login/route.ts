@@ -17,7 +17,12 @@ export async function POST(req: NextRequest) {
   const { password } = await req.json();
 
   if (!password || typeof password !== "string") {
-    return NextResponse.json({ ok: false, error: "Missing password" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Missing PIN" }, { status: 400 });
+  }
+  if (!/^\d{6}$/.test(password)) {
+    // Fail fast on obviously-wrong input without spending a rate-limit
+    // attempt on it -- a real PIN is always exactly 6 digits.
+    return NextResponse.json({ ok: false, error: "Incorrect PIN" }, { status: 401 });
   }
 
   const ip = clientIp(req);
@@ -48,7 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!projectId) {
-    return NextResponse.json({ ok: false, error: "Incorrect password" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Incorrect PIN" }, { status: 401 });
   }
 
   const res = NextResponse.json({ ok: true });

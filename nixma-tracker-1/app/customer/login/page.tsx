@@ -39,23 +39,26 @@ export default function CustomerLogin() {
         </p>
         <h1 className="text-xl font-semibold mb-1">Project status</h1>
         <p className="text-sm text-[var(--ink)]/60 mb-4">
-          Enter the access code shared with you to view your project&rsquo;s
-          live progress.
+          Enter the 6-digit PIN shared with you to view your project&rsquo;s
+          progress.
         </p>
         <input
           type="password"
+          inputMode="numeric"
+          autoComplete="one-time-code"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Access code"
+          onChange={(e) => setPassword(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          placeholder="6-digit PIN"
+          maxLength={6}
           autoFocus
-          className="border border-[var(--line)] rounded px-3 py-2 text-sm w-full bg-white mb-3"
+          className="border border-[var(--line)] rounded px-3 py-2 text-sm w-full bg-white mb-3 tracking-[0.3em] text-center font-mono-num"
         />
         {error && (
           <p className="text-sm text-[var(--rust)] mb-3">{error}</p>
         )}
         <button
           type="submit"
-          disabled={loading || !password}
+          disabled={loading || password.length !== 6}
           className="w-full bg-[var(--accent)] text-white rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
         >
           {loading ? "Checking…" : "View status"}
