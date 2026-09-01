@@ -12,6 +12,35 @@ import {
   STATUS_LABEL,
   STATUS_COLOR,
 } from "@/lib/schedule";
+import { exportTasksPdf } from "@/lib/exportPdf";
+import { useTaskRealtime } from "@/lib/useTaskRealtime";
+
+interface TaskHistoryRow {
+  id: number;
+  changed_at: string;
+  changed_by_name: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+}
+
+const HISTORY_FIELD_LABEL: Record<string, string> = {
+  scheduled_start: "Scheduled start",
+  scheduled_finish: "Scheduled finish",
+  percent_complete: "% complete",
+  assignee: "Owner",
+  status_note: "Note",
+  is_active: "In use",
+};
+
+function fmtHistoryTimestamp(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 function StatusBadge({ status }: { status: ReturnType<typeof computeStatus> }) {
   return (
@@ -35,11 +64,17 @@ function StatusBadge({ status }: { status: ReturnType<typeof computeStatus> }) {
 export default function InternalView() {
   const projectId = useProjectId();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [projectInfo, setProjectInfo] = useState<{ name: string; customer: string; project_code: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deptFilter, setDeptFilter] = useState<string>("All");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(true);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+  const { staleNotice, dismissStaleNotice, markLocalWrite } = useTaskRealtime(projectId);
+  const [historyTask, setHistoryTask] = useState<Task | null>(null);
+  const [historyRows, setHistoryRows] = useState<TaskHistoryRow[] | null>(null);
 
   async function loadTasks() {
     setLoading(true);
@@ -59,7 +94,21 @@ export default function InternalView() {
 
   useEffect(() => {
     loadTasks();
+    supabase
+      .from("projects")
+      .select("name, customer, project_code")
+      .eq("id", projectId)
+      .single()
+      .then(({ data }) => setProjectInfo(data as typeof projectInfo));
   }, [projectId]);
+
+  function handleExportPdf() {
+    exportTasksPdf(tasks, {
+      projectName: projectInfo?.name ?? projectId,
+      customer: projectInfo?.customer,
+      projectCode: projectInfo?.project_code,
+    });
+  }
 
   const today = useMemo(() => new Date(), []);
   const summary = useMemo(() => summarize(tasks, today), [tasks, today]);
@@ -68,7 +117,9 @@ export default function InternalView() {
   async function updateTask(id: number, patch: Partial<Task>) {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
     setSavingIds((prev) => new Set(prev).add(id));
+    markLocalWrite();
     const { error: err } = await supabase.from("tasks").update(patch).eq("id", id);
+    markLocalWrite();
     setSavingIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -77,15 +128,33 @@ export default function InternalView() {
     if (err) setError(err.message);
   }
 
-  const visibleTasks = tasks.filter(
-    (t) =>
-      !t.is_summary &&
-      (deptFilter === "All" || t.department === deptFilter) &&
-      (showInactive || t.is_active)
-  );
+  const trimmedSearch = search.trim().toLowerCase();
+  const visibleTasks = tasks.filter((t) => {
+    if (t.is_summary) return false;
+    if (deptFilter !== "All" && t.department !== deptFilter) return false;
+    if (!showInactive && !t.is_active) return false;
+    if (statusFilter !== "All" && computeStatus(t, today) !== statusFilter) return false;
+    if (trimmedSearch) {
+      const haystack = `${t.description} ${t.task_no} ${t.assignee ?? ""} ${t.status_note ?? ""}`.toLowerCase();
+      if (!haystack.includes(trimmedSearch)) return false;
+    }
+    return true;
+  });
 
   const allVisibleActive =
     visibleTasks.length > 0 && visibleTasks.every((t) => t.is_active);
+
+  async function openHistory(t: Task) {
+    setHistoryTask(t);
+    setHistoryRows(null);
+    const { data, error: err } = await supabase.rpc("get_task_history", { p_task_id: t.id });
+    if (err) {
+      setError(err.message);
+      setHistoryRows([]);
+    } else {
+      setHistoryRows((data as TaskHistoryRow[]) || []);
+    }
+  }
 
   async function updateAllVisible(active: boolean) {
     const ids = visibleTasks.map((t) => t.id);
@@ -98,10 +167,12 @@ export default function InternalView() {
       ids.forEach((id) => next.add(id));
       return next;
     });
+    markLocalWrite();
     const { error: err } = await supabase
       .from("tasks")
       .update({ is_active: active })
       .in("id", ids);
+    markLocalWrite();
     setSavingIds((prev) => {
       const next = new Set(prev);
       ids.forEach((id) => next.delete(id));
@@ -131,6 +202,12 @@ export default function InternalView() {
             . <Link href={withProject("/internal/board", projectId)} className="underline hover:text-[var(--accent)]">Board &rarr;</Link>
           </p>
         </div>
+        <button
+          onClick={handleExportPdf}
+          className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90 shrink-0"
+        >
+          Export PDF
+        </button>
       </div>
 
       {error && (
@@ -139,9 +216,36 @@ export default function InternalView() {
         </div>
       )}
 
+      {staleNotice && (
+        <div className="mb-4 flex items-center justify-between gap-3 text-sm text-[var(--amber)] bg-[var(--amber)]/10 border border-[var(--amber)]/30 rounded px-3 py-2">
+          <span>Someone else updated this project's tasks. Refresh to see the latest.</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => {
+                dismissStaleNotice();
+                loadTasks();
+              }}
+              className="underline font-medium hover:opacity-80"
+            >
+              Refresh
+            </button>
+            <button onClick={dismissStaleNotice} className="text-[var(--ink)]/40 hover:text-[var(--ink)]/70">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <SummaryCards summary={summary} progress={progress} />
 
       <div className="flex items-center gap-4 my-6 flex-wrap">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search tasks, owner, notes…"
+          className="border border-[var(--line)] rounded px-2.5 py-1 text-sm bg-white min-w-[200px]"
+        />
         <div className="flex items-center gap-3">
           <label className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
             Department
@@ -157,6 +261,23 @@ export default function InternalView() {
             ))}
           </select>
         </div>
+        <div className="flex items-center gap-3">
+          <label className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
+            Status
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-[var(--line)] rounded px-2 py-1 text-sm bg-white"
+          >
+            <option>All</option>
+            {Object.entries(STATUS_LABEL).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
         <label className="flex items-center gap-1.5 text-xs text-[var(--ink)]/60">
           <input
             type="checkbox"
@@ -166,6 +287,11 @@ export default function InternalView() {
           Show excluded tasks
         </label>
         {loading && <span className="text-xs text-[var(--ink)]/50">Loading…</span>}
+        {(trimmedSearch || deptFilter !== "All" || statusFilter !== "All") && (
+          <span className="text-xs text-[var(--ink)]/40">
+            {visibleTasks.length} match{visibleTasks.length === 1 ? "" : "es"}
+          </span>
+        )}
       </div>
 
       <div className="overflow-x-auto border border-[var(--line)] rounded-lg bg-white/60">
@@ -193,6 +319,7 @@ export default function InternalView() {
               <th className="p-3 whitespace-nowrap">Scheduled</th>
               <th className="p-3">Status</th>
               <th className="p-3 min-w-[200px]">Note</th>
+              <th className="p-3 w-20">History</th>
             </tr>
           </thead>
           <tbody>
@@ -249,13 +376,90 @@ export default function InternalView() {
                       className="border border-[var(--line)] rounded px-1.5 py-1 text-xs w-full bg-white"
                     />
                   </td>
+                  <td className="p-3">
+                    <button
+                      onClick={() => openHistory(t)}
+                      className="text-xs underline text-[var(--ink)]/50 hover:text-[var(--accent)]"
+                    >
+                      View
+                    </button>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {historyTask && (
+        <HistoryModal
+          task={historyTask}
+          rows={historyRows}
+          onClose={() => {
+            setHistoryTask(null);
+            setHistoryRows(null);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+function HistoryModal({
+  task,
+  rows,
+  onClose,
+}: {
+  task: Task;
+  rows: TaskHistoryRow[] | null;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg max-w-lg w-full max-h-[80vh] overflow-y-auto p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between mb-4 gap-3">
+          <div>
+            <h2 className="font-semibold">{task.description}</h2>
+            <p className="text-xs text-[var(--ink)]/40 font-mono">Change history</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[var(--ink)]/40 hover:text-[var(--ink)]/70 text-sm"
+          >
+            Close
+          </button>
+        </div>
+
+        {rows === null ? (
+          <p className="text-sm text-[var(--ink)]/50">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-[var(--ink)]/50">No changes recorded yet.</p>
+        ) : (
+          <ul className="space-y-3">
+            {rows.map((r) => (
+              <li key={r.id} className="text-sm border-b border-[var(--line)] pb-2 last:border-0">
+                <p>
+                  <span className="font-medium">{HISTORY_FIELD_LABEL[r.field] ?? r.field}</span>{" "}
+                  changed from{" "}
+                  <span className="font-mono-num text-[var(--ink)]/70">{r.old_value ?? "—"}</span>{" "}
+                  to{" "}
+                  <span className="font-mono-num text-[var(--accent)]">{r.new_value ?? "—"}</span>
+                </p>
+                <p className="text-xs text-[var(--ink)]/40 mt-0.5">
+                  {r.changed_by_name} &middot; {fmtHistoryTimestamp(r.changed_at)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 
