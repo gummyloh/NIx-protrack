@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Photo, Task } from "@/lib/types";
 import { useProjectId, withProject } from "@/lib/useProjectId";
+import { prepareImageForUpload, ImageUploadError } from "@/lib/imageUpload";
 
 interface PhotoWithUrl extends Photo {
   url: string | null;
@@ -80,10 +81,20 @@ export default function PhotosPage() {
   }, [projectId]);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
     setUploading(true);
     setError(null);
+
+    let file: File;
+    try {
+      file = await prepareImageForUpload(rawFile);
+    } catch (err) {
+      setError(err instanceof ImageUploadError ? err.message : "Couldn't process that image.");
+      setUploading(false);
+      e.target.value = "";
+      return;
+    }
 
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${projectId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
