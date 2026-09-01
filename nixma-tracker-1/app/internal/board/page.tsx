@@ -7,6 +7,7 @@ import { Task } from "@/lib/types";
 import { useProjectId, withProject } from "@/lib/useProjectId";
 import { computeStatus, STATUS_LABEL, STATUS_COLOR } from "@/lib/schedule";
 import { cascadeSchedule } from "@/lib/cascade";
+import { useTaskRealtime } from "@/lib/useTaskRealtime";
 
 type Priority = "High" | "Medium" | "Low";
 
@@ -49,6 +50,8 @@ export default function Board() {
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const { staleNotice, dismissStaleNotice, markLocalWrite } = useTaskRealtime(projectId);
 
   async function loadTasks() {
     setLoading(true);
@@ -86,6 +89,7 @@ export default function Board() {
       });
     });
 
+    markLocalWrite();
     const { error: err } = await supabase.from("tasks").update(patch).eq("id", id);
     for (const u of cascaded) {
       await supabase
@@ -93,13 +97,27 @@ export default function Board() {
         .update({ scheduled_start: u.scheduled_start, scheduled_finish: u.scheduled_finish })
         .eq("id", u.id);
     }
+    markLocalWrite();
     if (err) setError(err.message);
     setEditingCell(null);
   }
 
+  async function refreshFromServer() {
+    dismissStaleNotice();
+    await loadTasks();
+  }
+
+  const filteredTasks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tasks;
+    return tasks.filter((t) =>
+      `${t.description} ${t.task_no} ${t.assignee ?? ""}`.toLowerCase().includes(q)
+    );
+  }, [tasks, search]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, Task[]>();
-    for (const t of tasks) {
+    for (const t of filteredTasks) {
       if (!map.has(t.department)) map.set(t.department, []);
       map.get(t.department)!.push(t);
     }
@@ -115,7 +133,7 @@ export default function Board() {
       }).length;
       return bBad - aBad;
     });
-  }, [tasks, today]);
+  }, [filteredTasks, today]);
 
   if (loading) {
     return (
@@ -147,11 +165,32 @@ export default function Board() {
             </Link>
           </p>
         </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search tasks or owner…"
+          className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white min-w-[200px]"
+        />
       </div>
 
       {error && (
         <div className="mb-4 text-sm text-[var(--rust)] bg-[var(--rust)]/10 border border-[var(--rust)]/30 rounded px-3 py-2">
           {error}
+        </div>
+      )}
+
+      {staleNotice && (
+        <div className="mb-4 flex items-center justify-between gap-3 text-sm text-[var(--amber)] bg-[var(--amber)]/10 border border-[var(--amber)]/30 rounded px-3 py-2">
+          <span>Someone else updated this project's tasks. Refresh to see the latest.</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={refreshFromServer} className="underline font-medium hover:opacity-80">
+              Refresh
+            </button>
+            <button onClick={dismissStaleNotice} className="text-[var(--ink)]/40 hover:text-[var(--ink)]/70">
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
@@ -186,7 +225,116 @@ export default function Board() {
 
               {!isCollapsed && (
                 <>
-                  <div className="overflow-x-auto bg-white/40">
+                  {/* Mobile: stacked cards instead of a cramped, sideways-scrolling
+                      table. Same data and the same editingCell state as the table
+                      below, just a layout better suited to a narrow screen. */}
+                  <div className="sm:hidden bg-white/40 divide-y divide-[var(--line)]">
+                    {deptTasks.map((t) => {
+                      const status = computeStatus(t, today);
+                      const priority = priorityFor(status);
+                      const ownerName = t.assignee || t.department;
+                      const overdue =
+                        status !== "completed" &&
+                        new Date(t.scheduled_finish + "T12:00:00Z").getTime() < today.getTime();
+                      const ownerKey = `${t.id}-owner`;
+                      const dateKey = `${t.id}-date`;
+
+                      return (
+                        <div key={t.id} className="p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{t.description}</p>
+                              <p className="text-xs text-[var(--ink)]/40 font-mono">
+                                #{t.task_no} &middot; {t.percent_complete}%
+                              </p>
+                            </div>
+                            <span
+                              className="inline-block text-xs font-medium px-2.5 py-1 rounded text-white whitespace-nowrap shrink-0"
+                              style={{ backgroundColor: STATUS_COLOR[status] }}
+                            >
+                              {STATUS_LABEL[status]}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            {editingCell === ownerKey ? (
+                              <input
+                                autoFocus
+                                defaultValue={t.assignee ?? ""}
+                                onBlur={(e) => updateTask(t.id, { assignee: e.target.value || null })}
+                                onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                                className="border border-[var(--line)] rounded px-1.5 py-0.5 text-xs w-28 bg-white"
+                              />
+                            ) : (
+                              <button
+                                onClick={() => setEditingCell(ownerKey)}
+                                className="flex items-center gap-1.5 hover:opacity-80"
+                              >
+                                <span
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
+                                  style={{ backgroundColor: colorFor(ownerName) }}
+                                >
+                                  {initials(ownerName)}
+                                </span>
+                                <span className="text-xs truncate max-w-[120px]">
+                                  {t.assignee || <span className="text-[var(--ink)]/30 italic">unassigned</span>}
+                                </span>
+                              </button>
+                            )}
+
+                            <span
+                              className="inline-block text-xs font-medium px-2.5 py-1 rounded text-white whitespace-nowrap"
+                              style={{ backgroundColor: PRIORITY_COLOR[priority] }}
+                            >
+                              {priority}
+                            </span>
+
+                            {editingCell === dateKey ? (
+                              <input
+                                autoFocus
+                                type="date"
+                                defaultValue={t.scheduled_finish}
+                                onBlur={(e) => {
+                                  if (!e.target.value) {
+                                    setEditingCell(null);
+                                    return;
+                                  }
+                                  updateTask(t.id, {
+                                    scheduled_finish: e.target.value,
+                                    percent_complete: 100,
+                                  });
+                                }}
+                                className="border border-[var(--line)] rounded px-1.5 py-0.5 text-xs w-32 bg-white"
+                              />
+                            ) : (
+                              <button
+                                onClick={() => setEditingCell(dateKey)}
+                                className="flex items-center gap-1 text-xs hover:opacity-80"
+                              >
+                                {overdue && <span title="Overdue">⚠️</span>}
+                                <span className="font-mono-num">{fmtDate(t.scheduled_finish)}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="relative h-5 bg-[var(--line)] rounded-full overflow-hidden w-full">
+                            <div
+                              className="absolute inset-y-0 left-0 rounded-full opacity-90"
+                              style={{
+                                width: `${t.percent_complete}%`,
+                                backgroundColor: STATUS_COLOR[status],
+                              }}
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono-num text-[var(--ink)]/70">
+                              {fmtDate(t.scheduled_start)} &rarr; {fmtDate(t.scheduled_finish)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="hidden sm:block overflow-x-auto bg-white/40">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-left text-xs font-mono uppercase tracking-wide text-[var(--ink)]/40 border-b border-[var(--line)]">
