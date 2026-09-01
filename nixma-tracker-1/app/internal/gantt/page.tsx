@@ -8,6 +8,8 @@ import { Task, DEPARTMENTS } from "@/lib/types";
 import { useProjectId, withProject } from "@/lib/useProjectId";
 import { computeStatus, STATUS_COLOR } from "@/lib/schedule";
 import { cascadeSchedule } from "@/lib/cascade";
+import { exportTasksPdf } from "@/lib/exportPdf";
+import { useTaskRealtime } from "@/lib/useTaskRealtime";
 
 // Flat, distinct colors per department -- this is what gives each category
 // its own identity in the chart. Status (on_track/at_risk/etc.) is layered
@@ -138,6 +140,7 @@ export default function GanttView() {
   // Full hierarchy now -- summaries included -- so groups can be built and
   // collapsed/expanded. (Previously this only loaded leaf tasks.)
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [projectInfo, setProjectInfo] = useState<{ name: string; customer: string; project_code: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -153,6 +156,7 @@ export default function GanttView() {
   const scrollPosRef = useRef<number | null>(null);
   // Tracks an in-progress drag-to-pan gesture on the chart body.
   const panRef = useRef<PanState | null>(null);
+  const { staleNotice, dismissStaleNotice, markLocalWrite } = useTaskRealtime(projectId);
 
   function getScrollEl(): HTMLElement | null {
     return (
@@ -182,7 +186,21 @@ export default function GanttView() {
 
   useEffect(() => {
     loadTasks();
+    supabase
+      .from("projects")
+      .select("name, customer, project_code")
+      .eq("id", projectId)
+      .single()
+      .then(({ data }) => setProjectInfo(data as typeof projectInfo));
   }, [projectId]);
+
+  function handleExportPdf() {
+    exportTasksPdf(allTasks, {
+      projectName: projectInfo?.name ?? projectId,
+      customer: projectInfo?.customer,
+      projectCode: projectInfo?.project_code,
+    });
+  }
 
   useEffect(() => {
     tasksRef.current = allTasks;
@@ -245,6 +263,7 @@ export default function GanttView() {
     );
     const cascaded = cascadeSchedule(updatedTasks, changedTaskId);
 
+    markLocalWrite();
     const { error: err1 } = await supabase
       .from("tasks")
       .update(patch)
@@ -260,6 +279,7 @@ export default function GanttView() {
         .eq("id", u.id);
       if (err2) setError(err2.message);
     }
+    markLocalWrite();
     if (err1) setError(err1.message);
 
     const cascadedById = new Map(cascaded.map((u) => [u.id, u]));
@@ -506,12 +526,40 @@ export default function GanttView() {
             </Link>
           </p>
         </div>
-        {saving && <span className="text-xs text-[var(--ink)]/50">Saving…</span>}
+        <div className="flex items-center gap-3 shrink-0">
+          {saving && <span className="text-xs text-[var(--ink)]/50">Saving…</span>}
+          <button
+            onClick={handleExportPdf}
+            className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90"
+          >
+            Export PDF
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="mb-4 text-sm text-[var(--rust)] bg-[var(--rust)]/10 border border-[var(--rust)]/30 rounded px-3 py-2">
           {error}
+        </div>
+      )}
+
+      {staleNotice && (
+        <div className="mb-4 flex items-center justify-between gap-3 text-sm text-[var(--amber)] bg-[var(--amber)]/10 border border-[var(--amber)]/30 rounded px-3 py-2">
+          <span>Someone else updated this project's tasks. Refresh to see the latest.</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => {
+                dismissStaleNotice();
+                loadTasks();
+              }}
+              className="underline font-medium hover:opacity-80"
+            >
+              Refresh
+            </button>
+            <button onClick={dismissStaleNotice} className="text-[var(--ink)]/40 hover:text-[var(--ink)]/70">
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
