@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import Link from "next/link";
 import "../../frappe-gantt.css";
 import { supabase } from "@/lib/supabase";
@@ -27,6 +27,97 @@ const DEPARTMENT_COLOR: Record<string, string> = {
   Installation: "#14b8a6",
 };
 const DEFAULT_DEPT_COLOR = "#6b7280";
+
+type PanState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startScrollLeft: number;
+  startScrollTop: number;
+  dragging: boolean;
+};
+
+// Elements a pan-drag should never start on -- frappe-gantt's own bar drag
+// (move/resize) and popup, plus native controls (view-mode select, today
+// button, popup form fields) all need their normal mouse behavior.
+const PAN_IGNORE_SELECTOR =
+  "button, select, input, textarea, a, .bar-wrapper, .handle, .popup-wrapper";
+const PAN_DRAG_THRESHOLD = 4; // px of movement before a mousedown counts as a drag, not a click
+
+// Lets the user grab and drag anywhere on the chart body to move it around,
+// instead of only via the horizontal scrollbar under the grid and the
+// browser's vertical scrollbar. `scrollEl` (frappe-gantt's own
+// ".gantt-container") owns horizontal scroll; vertical scroll happens on the
+// page itself since the chart grows to fit its content, so panning moves
+// window scroll for the vertical axis.
+function attachChartPanning(
+  scrollEl: HTMLElement,
+  panRef: MutableRefObject<PanState | null>
+) {
+  function onPointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(PAN_IGNORE_SELECTOR)) return;
+
+    panRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startScrollLeft: scrollEl.scrollLeft,
+      startScrollTop: window.scrollY,
+      dragging: false,
+    };
+    scrollEl.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    const state = panRef.current;
+    if (!state || state.pointerId !== e.pointerId) return;
+
+    const dx = e.clientX - state.startX;
+    const dy = e.clientY - state.startY;
+
+    if (!state.dragging) {
+      if (Math.abs(dx) < PAN_DRAG_THRESHOLD && Math.abs(dy) < PAN_DRAG_THRESHOLD) return;
+      state.dragging = true;
+      scrollEl.classList.add("gantt-panning");
+      document.body.style.userSelect = "none";
+    }
+
+    e.preventDefault();
+    scrollEl.scrollLeft = state.startScrollLeft - dx;
+    window.scrollTo(window.scrollX, state.startScrollTop - dy);
+  }
+
+  function endPan(e: PointerEvent) {
+    const state = panRef.current;
+    if (!state || state.pointerId !== e.pointerId) return;
+
+    if (state.dragging) {
+      // A drag shouldn't also register as a click on whatever's underneath
+      // (e.g. clearing selection via a background grid-row click).
+      const suppressClick = (ev: MouseEvent) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+      };
+      scrollEl.addEventListener("click", suppressClick, { capture: true, once: true });
+    }
+
+    panRef.current = null;
+    scrollEl.classList.remove("gantt-panning");
+    document.body.style.userSelect = "";
+    try {
+      scrollEl.releasePointerCapture(e.pointerId);
+    } catch {
+      // pointer was already released (e.g. pointercancel)
+    }
+  }
+
+  scrollEl.addEventListener("pointerdown", onPointerDown);
+  scrollEl.addEventListener("pointermove", onPointerMove);
+  scrollEl.addEventListener("pointerup", endPan);
+  scrollEl.addEventListener("pointercancel", endPan);
+}
 
 function deptColor(department: string): string {
   return DEPARTMENT_COLOR[department] ?? DEFAULT_DEPT_COLOR;
@@ -60,6 +151,8 @@ export default function GanttView() {
   // edit doesn't snap the view back to today. null = first render, let the
   // chart do its default scroll-to-today.
   const scrollPosRef = useRef<number | null>(null);
+  // Tracks an in-progress drag-to-pan gesture on the chart body.
+  const panRef = useRef<PanState | null>(null);
 
   function getScrollEl(): HTMLElement | null {
     return (
@@ -346,6 +439,11 @@ export default function GanttView() {
         }
       }
 
+      // Let the user grab and drag anywhere on the chart to move it around,
+      // instead of only via the scrollbars.
+      const scrollEl = getScrollEl();
+      if (scrollEl) attachChartPanning(scrollEl, panRef);
+
       // Center the vertical "today" line in the viewport, instead of
       // frappe-gantt's default of aligning it near the left edge.
       function centerOnToday() {
@@ -582,6 +680,18 @@ export default function GanttView() {
         .gantt-container .current-date-highlight,
         .gantt-container .current-upper {
           font-size: 10px;
+        }
+
+        /* Drag-to-pan affordance: an open hand over the chart body, a
+           closed one while actively panning. Bars keep their own pointer
+           cursor (set by frappe-gantt) since dragging one reschedules it
+           instead of panning. */
+        .gantt-container {
+          cursor: grab;
+        }
+        .gantt-container.gantt-panning,
+        .gantt-container.gantt-panning * {
+          cursor: grabbing !important;
         }
       `}</style>
     </main>
