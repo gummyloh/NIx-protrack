@@ -30,6 +30,12 @@ const DEPARTMENT_COLOR: Record<string, string> = {
 };
 const DEFAULT_DEPT_COLOR = "#6b7280";
 
+// Zoom levels the wheel gesture (and the built-in dropdown) cycle through,
+// ordered coarsest to finest. Ctrl/Cmd + scroll up walks toward the end of
+// this array (more detail -- months become weeks become days); scrolling
+// down walks back toward the start.
+const ZOOM_LEVELS = ["Month", "Week", "Day"];
+
 type PanState = {
   pointerId: number;
   startX: number;
@@ -121,6 +127,95 @@ function attachChartPanning(
   scrollEl.addEventListener("pointercancel", endPan);
 }
 
+function daysInMonth(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+// frappe-gantt's own date-math helpers aren't exported, so these mirror just
+// enough of them (day/hour offsets as plain ms, month offsets via calendar
+// arithmetic) to convert between a screen pixel and a calendar date at
+// whatever zoom level is currently active.
+function addUnits(date: Date, qty: number, unit: string): Date {
+  if (unit === "month") {
+    const d = new Date(date);
+    const whole = Math.trunc(qty);
+    d.setMonth(d.getMonth() + whole);
+    d.setDate(d.getDate() + (qty - whole) * daysInMonth(d));
+    return d;
+  }
+  const msPerUnit = unit === "hour" ? 3_600_000 : 86_400_000;
+  return new Date(date.getTime() + qty * msPerUnit);
+}
+
+function diffUnits(date: Date, from: Date, unit: string): number {
+  if (unit === "month") {
+    const months =
+      (date.getFullYear() - from.getFullYear()) * 12 + (date.getMonth() - from.getMonth());
+    return months + (date.getDate() - from.getDate()) / daysInMonth(date);
+  }
+  const msPerUnit = unit === "hour" ? 3_600_000 : 86_400_000;
+  return (date.getTime() - from.getTime()) / msPerUnit;
+}
+
+// Ctrl/Cmd + mouse-wheel (and trackpad pinch, which browsers report as the
+// same ctrlKey-flagged wheel event) zooms the timeline in place: whatever
+// date is under the cursor stays under the cursor as the grid switches
+// between Month/Week/Day, the same feel as zooming a map. Plain scrolling
+// (no modifier) is left completely alone.
+function attachWheelZoom(
+  scrollEl: HTMLElement,
+  ganttRef: MutableRefObject<any>,
+  viewModeRef: MutableRefObject<string>,
+  zoomLockRef: MutableRefObject<boolean>
+) {
+  function onWheel(e: WheelEvent) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+
+    const gantt = ganttRef.current;
+    if (!gantt || zoomLockRef.current) return;
+
+    const currentIndex = ZOOM_LEVELS.indexOf(viewModeRef.current);
+    if (currentIndex === -1) return;
+    const zoomingIn = e.deltaY < 0;
+    const nextIndex = zoomingIn
+      ? Math.min(currentIndex + 1, ZOOM_LEVELS.length - 1)
+      : Math.max(currentIndex - 1, 0);
+    if (nextIndex === currentIndex) return;
+
+    const rect = scrollEl.getBoundingClientRect();
+    const cursorOffset = e.clientX - rect.left;
+    const cursorContentX = scrollEl.scrollLeft + cursorOffset;
+
+    const oldUnit: string = gantt.config.unit;
+    const cursorDate = addUnits(
+      gantt.gantt_start,
+      (cursorContentX / gantt.config.column_width) * gantt.config.step,
+      oldUnit
+    );
+
+    zoomLockRef.current = true;
+    gantt.change_view_mode(ZOOM_LEVELS[nextIndex], true);
+    viewModeRef.current = ZOOM_LEVELS[nextIndex];
+
+    const newUnit: string = gantt.config.unit;
+    const newContentX =
+      (diffUnits(cursorDate, gantt.gantt_start, newUnit) / gantt.config.step) *
+      gantt.config.column_width;
+    const maxScroll = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+    scrollEl.scrollLeft = Math.min(Math.max(newContentX - cursorOffset, 0), maxScroll);
+
+    // A trackpad pinch/scroll fires many small events per gesture -- without
+    // this, one gesture would fly through every zoom level instead of
+    // stepping once per pause.
+    setTimeout(() => {
+      zoomLockRef.current = false;
+    }, 220);
+  }
+
+  scrollEl.addEventListener("wheel", onWheel, { passive: false });
+}
+
 function deptColor(department: string): string {
   return DEPARTMENT_COLOR[department] ?? DEFAULT_DEPT_COLOR;
 }
@@ -156,6 +251,13 @@ export default function GanttView() {
   const scrollPosRef = useRef<number | null>(null);
   // Tracks an in-progress drag-to-pan gesture on the chart body.
   const panRef = useRef<PanState | null>(null);
+  // Current zoom level, kept outside React state so switching it (via wheel
+  // or the dropdown) never triggers our own rebuild effect -- but still
+  // remembered across a rebuild that *does* happen for another reason (an
+  // edit changes ganttSignature), so an edit mid-zoom doesn't snap back to
+  // Month.
+  const viewModeRef = useRef<string>(ZOOM_LEVELS[0]);
+  const zoomLockRef = useRef(false);
   const { staleNotice, dismissStaleNotice, markLocalWrite } = useTaskRealtime(projectId);
 
   function getScrollEl(): HTMLElement | null {
@@ -352,12 +454,17 @@ export default function GanttView() {
 
       containerRef.current!.innerHTML = "";
       ganttRef.current = new Gantt(containerRef.current!, ganttTasks, {
-        view_mode: "Month",
+        view_mode: viewModeRef.current,
         // frappe-gantt silently forces the default view to whichever mode
         // is FIRST in this array, overriding view_mode above -- so Month
         // has to be listed first for the explicit default to actually win.
-        view_modes: ["Month", "Week"],
+        view_modes: ZOOM_LEVELS,
         view_mode_select: true,
+        // Keep viewModeRef in sync no matter how the mode changed (wheel
+        // zoom, or the dropdown), so a later chart rebuild restores it.
+        on_view_change: (mode: any) => {
+          viewModeRef.current = mode.name;
+        },
         today_button: true,
         readonly_progress: false,
         // Compact monday.com-style sizing (defaults: bar 30, padding 18,
@@ -462,7 +569,10 @@ export default function GanttView() {
       // Let the user grab and drag anywhere on the chart to move it around,
       // instead of only via the scrollbars.
       const scrollEl = getScrollEl();
-      if (scrollEl) attachChartPanning(scrollEl, panRef);
+      if (scrollEl) {
+        attachChartPanning(scrollEl, panRef);
+        attachWheelZoom(scrollEl, ganttRef, viewModeRef, zoomLockRef);
+      }
 
       // Center the vertical "today" line in the viewport, instead of
       // frappe-gantt's default of aligning it near the left edge.
@@ -520,7 +630,10 @@ export default function GanttView() {
             <strong>Click a bold group row</strong> to expand or collapse it.
             On a leaf task: drag a bar to shift dates, drag the fill to update
             % complete, or <strong>click</strong> to edit dates, % complete,
-            and notes directly. Downstream tasks shift automatically.{" "}
+            and notes directly. Downstream tasks shift automatically. Hold{" "}
+            <strong>Ctrl</strong> (or <strong>⌘</strong>) and scroll on the
+            chart to zoom the timeline from months down to weeks and days,
+            centered on your cursor.{" "}
             <Link href={withProject("/internal/tasks", projectId)} className="underline hover:text-[var(--accent)]">
               View as table &rarr;
             </Link>
