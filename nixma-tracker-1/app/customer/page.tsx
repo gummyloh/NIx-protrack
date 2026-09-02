@@ -169,6 +169,83 @@ export default function CustomerView() {
             {update?.note ? ` — ${update.note}` : ""}
           </p>
 
+          {snapshot.moduleRollup && snapshot.moduleRollup.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-3">
+                Machine Readiness
+              </h2>
+              <div className="space-y-4">
+                {snapshot.moduleRollup.map((mod) => (
+                  <div
+                    key={mod.name}
+                    className="border border-[var(--line)] rounded-lg p-5 bg-white/60"
+                  >
+                    <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                      <h3 className="font-medium">{mod.name}</h3>
+                      <span
+                        className="text-xs font-medium whitespace-nowrap px-2 py-0.5 rounded-full border shrink-0"
+                        style={
+                          mod.ready
+                            ? {
+                                color: "var(--accent)",
+                                borderColor: "var(--accent)55",
+                                backgroundColor: "var(--accent)12",
+                              }
+                            : {
+                                color: "var(--rust)",
+                                borderColor: "var(--rust)55",
+                                backgroundColor: "var(--rust)12",
+                              }
+                        }
+                      >
+                        {mod.ready
+                          ? "Ready"
+                          : `${mod.openBlockerCount} open blocker${mod.openBlockerCount === 1 ? "" : "s"}`}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {mod.stations.map((s) => (
+                        <div key={s.name} className="text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[var(--ink)]/80">{s.name}</span>
+                            <span
+                              className="text-xs font-medium whitespace-nowrap px-2 py-0.5 rounded-full border shrink-0"
+                              style={
+                                s.ready
+                                  ? {
+                                      color: "var(--accent)",
+                                      borderColor: "var(--accent)55",
+                                      backgroundColor: "var(--accent)12",
+                                    }
+                                  : {
+                                      color: "var(--rust)",
+                                      borderColor: "var(--rust)55",
+                                      backgroundColor: "var(--rust)12",
+                                    }
+                              }
+                            >
+                              {s.ready ? "Ready" : "Not ready"}
+                            </span>
+                          </div>
+                          {s.visibleItems.length > 0 && (
+                            <ul className="mt-1 ml-3 list-disc text-xs text-[var(--ink)]/60 space-y-0.5">
+                              {s.visibleItems.map((item, i) => (
+                                <li key={i}>
+                                  {item.description}
+                                  {item.severity === "blocker" ? " (blocker)" : ""}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-6">
             {snapshot.departments.map((dept) => (
               <div

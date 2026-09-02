@@ -14,7 +14,9 @@ import {
 } from "@/lib/schedule";
 import { exportTasksPdf } from "@/lib/exportPdf";
 import { useTaskRealtime } from "@/lib/useTaskRealtime";
-import { buildClientSnapshot } from "@/lib/clientSnapshot";
+import { buildClientSnapshot, buildModuleRollupSnapshot } from "@/lib/clientSnapshot";
+import { computeModuleRollup } from "@/lib/moduleReadiness";
+import { ModuleRow, StationRow, PunchItem } from "@/lib/types";
 
 interface TaskHistoryRow {
   id: number;
@@ -211,6 +213,23 @@ export default function InternalView() {
       (t) => t.show_to_client && t.is_active && !t.is_summary
     );
     const snapshot = buildClientSnapshot(clientVisible, today);
+
+    // Module rollup is optional -- projects that haven't set up modules yet
+    // just publish without it, same as before this feature existed.
+    const [modulesRes, stationsRes, punchRes] = await Promise.all([
+      supabase.from("modules").select("*").eq("project_id", projectId),
+      supabase.from("stations").select("*").eq("project_id", projectId),
+      supabase.from("punch_items").select("*").eq("project_id", projectId),
+    ]);
+    if ((modulesRes.data?.length ?? 0) > 0) {
+      const rollup = computeModuleRollup(
+        (modulesRes.data ?? []) as ModuleRow[],
+        (stationsRes.data ?? []) as StationRow[],
+        (punchRes.data ?? []) as PunchItem[]
+      );
+      snapshot.moduleRollup = buildModuleRollupSnapshot(rollup);
+    }
+
     const { error: err } = await supabase.rpc("publish_client_update", {
       p_project_id: projectId,
       p_note: publishNote.trim() || null,

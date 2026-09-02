@@ -84,6 +84,54 @@ export interface ProjectRow {
   created_at: string;
 }
 
+export type PunchSeverity = "blocker" | "minor" | "cosmetic";
+export type PunchStatus = "open" | "closed" | "waived";
+
+export interface ModuleRow {
+  id: number;
+  project_id: string;
+  name: string;
+  sequence: number;
+  created_at: string;
+}
+
+export interface StationRow {
+  id: number;
+  module_id: number;
+  project_id: string;
+  name: string;
+  sequence: number;
+  created_at: string;
+}
+
+export interface PunchItem {
+  id: number;
+  station_id: number;
+  project_id: string;
+  description: string;
+  severity: PunchSeverity;
+  status: PunchStatus;
+  show_to_client: boolean;
+  linked_task_id: number | null;
+  created_at: string;
+  created_by: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
+  // Carried over from the flat Teleflex punch list this table was migrated
+  // from (see supabase/015). All optional -- a punch item logged fresh from
+  // the Modules page going forward only needs description/severity, but
+  // migrated rows keep their original detail here rather than losing it.
+  item_no: number | null;
+  category: string | null;
+  priority: string | null; // original Critical/High/Medium/Low, kept for reference; severity is what drives readiness now
+  percent_complete: number | null;
+  target_date: string | null; // ISO date
+  pic: string | null; // person in charge, freeform name
+  remarks: string | null;
+  acceptance_criteria: string | null;
+  source: string;
+}
+
 export const DEPARTMENTS = [
   "Project Management",
   "Mechanical",
