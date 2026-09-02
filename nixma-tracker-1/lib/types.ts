@@ -35,6 +35,15 @@ export interface Task {
   updated_by: string | null;
   updated_at: string | null;
   show_to_client: boolean; // included in the next published client update?
+  // Which machine module(s)/station(s) this task belongs to, e.g.
+  // "Vacuum Suction & Mandrel Insertion". Most master-schedule tasks are
+  // generic process steps (design sign-off, procurement, ...) that apply to
+  // the whole machine, so these are null for most rows -- only set for
+  // tasks that map onto a specific station in the punch list. A task can
+  // span more than one station (rare), hence arrays rather than a single
+  // value.
+  modules: string[] | null;
+  stations: string[] | null;
 }
 
 export type NoteAudience = "internal" | "client";

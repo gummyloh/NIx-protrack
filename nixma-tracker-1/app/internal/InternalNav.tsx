@@ -59,6 +59,7 @@ export default function InternalNav({ isAdmin }: { isAdmin: boolean }) {
         { label: "Board", href: withProject("/internal/board", projectId) },
         { label: "Task Table", href: withProject("/internal/tasks", projectId) },
         { label: "Gantt Chart", href: withProject("/internal/gantt", projectId) },
+        { label: "Module Rollup", href: withProject("/internal/modules", projectId) },
       ];
   if (isAdmin && !isProjectsList) {
     links.push({ label: "Team", href: withProject("/internal/team", projectId) });
