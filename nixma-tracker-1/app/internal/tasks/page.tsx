@@ -82,6 +82,15 @@ export default function InternalView() {
   const [publishing, setPublishing] = useState(false);
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [lastPublished, setLastPublished] = useState<string | null>(null);
+  // Tasks with 1+ punch items linked to them get their percent_complete
+  // computed automatically by a DB trigger (closed+waived / total linked
+  // items) -- this map is just so the UI knows which tasks that applies to,
+  // so it can show a read-only "auto" badge instead of a slider for them.
+  const [punchLinks, setPunchLinks] = useState<Map<number, { total: number; done: number }>>(new Map());
+  // Live value while dragging a progress slider, before it's committed to
+  // the DB on release -- keeps the drag smooth without writing on every
+  // pixel of movement.
+  const [percentDraft, setPercentDraft] = useState<Record<number, number>>({});
 
   async function loadLastPublished() {
     const { data } = await supabase
@@ -110,9 +119,26 @@ export default function InternalView() {
     setLoading(false);
   }
 
+  async function loadPunchLinks() {
+    const { data } = await supabase
+      .from("punch_items")
+      .select("linked_task_id, status")
+      .eq("project_id", projectId)
+      .not("linked_task_id", "is", null);
+    const map = new Map<number, { total: number; done: number }>();
+    for (const row of (data ?? []) as { linked_task_id: number; status: string }[]) {
+      const entry = map.get(row.linked_task_id) ?? { total: 0, done: 0 };
+      entry.total += 1;
+      if (row.status === "closed" || row.status === "waived") entry.done += 1;
+      map.set(row.linked_task_id, entry);
+    }
+    setPunchLinks(map);
+  }
+
   useEffect(() => {
     loadTasks();
     loadLastPublished();
+    loadPunchLinks();
     supabase
       .from("projects")
       .select("name, customer, project_code")
@@ -420,6 +446,7 @@ export default function InternalView() {
               <th className="p-3">Dept</th>
               <th className="p-3 whitespace-nowrap">Planned</th>
               <th className="p-3 whitespace-nowrap">Scheduled</th>
+              <th className="p-3 min-w-[140px]">Progress</th>
               <th className="p-3">Status</th>
               <th className="p-3 min-w-[200px]">Note</th>
               <th className="p-3 w-20">History</th>
@@ -469,6 +496,59 @@ export default function InternalView() {
                     <span className={dateDrifted ? "text-[var(--amber)] font-medium" : ""}>
                       {t.scheduled_start.slice(5)} &rarr; {t.scheduled_finish.slice(5)}
                     </span>
+                  </td>
+                  <td className="p-3">
+                    {punchLinks.has(t.id) ? (
+                      <div>
+                        <div className="h-1.5 bg-[var(--line)] rounded-full overflow-hidden mb-1">
+                          <div
+                            className="h-full bg-[var(--accent)]"
+                            style={{ width: `${t.percent_complete}%` }}
+                          />
+                        </div>
+                        <Link
+                          href={withProject("/internal/modules", projectId)}
+                          className="text-xs font-mono-num text-[var(--ink)]/50 hover:text-[var(--accent)] underline"
+                          title="Computed from linked punch items -- close/reopen them on the Modules page to change this"
+                        >
+                          {t.percent_complete}% auto ({punchLinks.get(t.id)!.done}/{punchLinks.get(t.id)!.total})
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={percentDraft[t.id] ?? t.percent_complete}
+                          onChange={(e) =>
+                            setPercentDraft((prev) => ({ ...prev, [t.id]: Number(e.target.value) }))
+                          }
+                          onMouseUp={(e) => {
+                            const value = Number((e.target as HTMLInputElement).value);
+                            setPercentDraft((prev) => {
+                              const next = { ...prev };
+                              delete next[t.id];
+                              return next;
+                            });
+                            if (value !== t.percent_complete) updateTask(t.id, { percent_complete: value });
+                          }}
+                          onTouchEnd={(e) => {
+                            const value = Number((e.target as HTMLInputElement).value);
+                            setPercentDraft((prev) => {
+                              const next = { ...prev };
+                              delete next[t.id];
+                              return next;
+                            });
+                            if (value !== t.percent_complete) updateTask(t.id, { percent_complete: value });
+                          }}
+                          className="w-20"
+                        />
+                        <span className="text-xs font-mono-num text-[var(--ink)]/60 w-9 shrink-0">
+                          {percentDraft[t.id] ?? t.percent_complete}%
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="p-3">
                     <StatusBadge status={status} />
