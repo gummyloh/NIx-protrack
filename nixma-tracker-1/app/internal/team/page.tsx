@@ -58,6 +58,7 @@ export default function TeamAdmin() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -161,27 +162,70 @@ export default function TeamAdmin() {
     await loadProjectMembers();
   }
 
+  // Shared by the "Add by email" form and the "Resend" button on a pending
+  // invite -- both just need the same call made against a different email
+  // and a different message to show for the result.
+  async function sendInvite(email: string): Promise<{
+    ok: boolean;
+    message: string;
+  }> {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      return { ok: false, message: "Your session expired -- please sign in again." };
+    }
+    let res: Response;
+    try {
+      res = await fetch("/api/team-invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ project_id: projectId, email }),
+      });
+    } catch {
+      return { ok: false, message: "Couldn't reach the server -- check your connection and try again." };
+    }
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      return { ok: false, message: data.error || "Something went wrong." };
+    }
+    if (data.result === "added") {
+      return { ok: true, message: `${email} already had an account -- added to the project right away.` };
+    }
+    // result === "invited"
+    if (data.emailSent) {
+      return { ok: true, message: `Invite email sent to ${email}. They'll land on the project as soon as they set a password.` };
+    }
+    return {
+      ok: true,
+      message: `Saved -- but the invite email didn't go out (${data.emailError || "unknown reason"}). They can still get in by signing up manually at /signup with that exact email.`,
+    };
+  }
+
   async function inviteByEmail(e: React.FormEvent) {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    const email = inviteEmail.trim();
+    if (!email) return;
     setInviting(true);
     setError(null);
     setInviteMessage(null);
-    const { data, error: err } = await supabase.rpc("invite_project_member", {
-      p_project_id: projectId,
-      p_email: inviteEmail.trim(),
-    });
+    const result = await sendInvite(email);
     setInviting(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    setInviteMessage(
-      data === "added"
-        ? `${inviteEmail.trim()} already had an account -- added to the project right away.`
-        : `${inviteEmail.trim()} doesn't have an account yet -- they'll be added automatically the moment they sign up with that email. Let them know to go to /signup.`
-    );
-    setInviteEmail("");
+    setInviteMessage(result.message);
+    if (result.ok) setInviteEmail("");
+    await loadProjectMembers();
+  }
+
+  async function resendInvite(email: string) {
+    setResendingEmail(email);
+    setError(null);
+    setInviteMessage(null);
+    const result = await sendInvite(email);
+    setResendingEmail(null);
+    setInviteMessage(result.message);
     await loadProjectMembers();
   }
 
@@ -271,8 +315,10 @@ export default function TeamAdmin() {
         )}
         <p className="text-xs text-[var(--ink)]/40 mb-4">
           If they already have an account, they're added right away. If not,
-          this just remembers the email -- they get access automatically the
-          first time they sign up with it, no separate invite email is sent.
+          we send them a real invite email with a link to set a password --
+          they land on the project the moment they use it. They can also
+          always just sign up manually at /signup with that exact email if
+          the email doesn't arrive.
         </p>
 
         {addable.length > 0 && (
@@ -307,12 +353,22 @@ export default function TeamAdmin() {
                   {inv.email}{" "}
                   <span className="text-xs text-[var(--ink)]/40">— awaiting sign-up</span>
                 </p>
-                <button
-                  onClick={() => cancelInvite(inv.email)}
-                  className="text-xs underline text-[var(--ink)]/40 hover:text-[var(--rust)] shrink-0"
-                >
-                  Cancel
-                </button>
+                <div className="flex items-center gap-3 shrink-0 text-xs">
+                  <button
+                    onClick={() => resendInvite(inv.email)}
+                    disabled={resendingEmail === inv.email}
+                    className="underline text-[var(--ink)]/40 hover:text-[var(--accent)] disabled:opacity-50"
+                    title="Re-sends the invite email. If they already opened the first one, Supabase may report the account as already pending rather than sending a fresh link -- point them at /signup directly if a resend doesn't help."
+                  >
+                    {resendingEmail === inv.email ? "Resending…" : "Resend"}
+                  </button>
+                  <button
+                    onClick={() => cancelInvite(inv.email)}
+                    className="underline text-[var(--ink)]/40 hover:text-[var(--rust)]"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ))}
           </div>
