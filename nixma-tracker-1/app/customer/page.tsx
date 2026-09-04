@@ -171,9 +171,14 @@ export default function CustomerView() {
 
           {snapshot.moduleRollup && snapshot.moduleRollup.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-sm font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-3">
+              <h2 className="text-sm font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-1">
                 Machine Readiness
               </h2>
+              <p className="text-xs text-[var(--ink)]/40 mb-3">
+                A <span className="font-medium text-[var(--ink)]/60">blocker</span> is a task
+                that has to be finished before that station can run. A station only shows
+                &ldquo;Ready&rdquo; once every blocker on it is cleared.
+              </p>
               <div className="space-y-4">
                 {snapshot.moduleRollup.map((mod) => (
                   <div
