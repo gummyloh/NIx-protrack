@@ -113,9 +113,17 @@ export default function TeamAdmin() {
   }, []);
 
   useEffect(() => {
+    // list_project_members (and friends) are admin-only server-side now --
+    // don't even fire the calls for a non-admin who lands on this route
+    // directly. isAdmin starts false until load() resolves, so this waits
+    // for that and simply never runs for anyone who isn't actually an admin.
+    if (!isAdmin) {
+      setMembersLoading(false);
+      return;
+    }
     loadProjectMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  }, [projectId, isAdmin]);
 
   async function patch(id: string, changes: Partial<Profile>) {
     setError(null);
