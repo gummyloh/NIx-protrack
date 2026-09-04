@@ -36,6 +36,10 @@ export default function ProjectsPage() {
   const [newProjectPin, setNewProjectPin] = useState<{ project_id: string; customer_pin: string } | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [revealedPins, setRevealedPins] = useState<Record<string, string>>({});
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<Record<string, string>>({});
 
   async function loadProjects() {
     setLoading(true);
@@ -99,6 +103,65 @@ export default function ProjectsPage() {
       return;
     }
     setRevealedPins((prev) => ({ ...prev, [projectId]: data as string }));
+  }
+
+  async function copyLink(projectId: string, token: string) {
+    const link = `${window.location.origin}/customer/access/${token}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkError((prev) => {
+        const next = { ...prev };
+        delete next[projectId];
+        return next;
+      });
+      setCopiedId(projectId);
+      setTimeout(() => setCopiedId((id) => (id === projectId ? null : id)), 2000);
+    } catch {
+      // Clipboard access can fail (permissions, non-secure context, etc.) --
+      // fall back to just showing the link so it can be copied by hand.
+      setLinkError((prev) => ({ ...prev, [projectId]: link }));
+    }
+  }
+
+  // Customer join link: never expires, doesn't need the PIN at all, and can
+  // be copied as many times as needed for recurring customer meetings --
+  // this is the "get or create" half, safe to click repeatedly.
+  async function handleCopyLink(projectId: string) {
+    setCopyingId(projectId);
+    setError(null);
+    const { data, error: err } = await supabase.rpc("ensure_project_access_token", {
+      p_project_id: projectId,
+    });
+    setCopyingId(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    await copyLink(projectId, data as string);
+  }
+
+  // Regenerating invalidates the old link immediately, same tradeoff as
+  // Reset PIN -- only needed if a link was shared somewhere it shouldn't
+  // have been.
+  async function handleRegenerateLink(projectId: string) {
+    if (
+      !confirm(
+        "Regenerate this project's customer link? The old link will stop working immediately."
+      )
+    ) {
+      return;
+    }
+    setRegeneratingId(projectId);
+    setError(null);
+    const { data, error: err } = await supabase.rpc("regenerate_project_access_token", {
+      p_project_id: projectId,
+    });
+    setRegeneratingId(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    await copyLink(projectId, data as string);
   }
 
   return (
@@ -208,7 +271,10 @@ export default function ProjectsPage() {
             A 6-digit access PIN is generated automatically when you create
             the project -- it&apos;ll be shown once, right here, so you can
             pass it on to the customer for the login page at /customer/login.
-            You can generate a new one anytime from "Reset PIN" below.
+            You can generate a new one anytime from "Reset PIN" below. For
+            recurring meetings, "Copy customer link" gives you a link that
+            logs the customer straight in without a PIN, and keeps working
+            until you regenerate it.
           </p>
         </div>
       )}
@@ -239,20 +305,46 @@ export default function ProjectsPage() {
                   </p>
                 </Link>
                 {isAdmin && (
-                  <button
-                    onClick={() => handleResetPin(p.id)}
-                    disabled={resettingId === p.id}
-                    className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 border border-[var(--line)] rounded px-2 py-1 hover:text-[var(--accent)] hover:border-[var(--accent)] disabled:opacity-50 shrink-0"
-                  >
-                    {resettingId === p.id ? "…" : "Reset PIN"}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleCopyLink(p.id)}
+                      disabled={copyingId === p.id}
+                      className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 border border-[var(--line)] rounded px-2 py-1 hover:text-[var(--accent)] hover:border-[var(--accent)] disabled:opacity-50"
+                    >
+                      {copyingId === p.id ? "…" : copiedId === p.id ? "Copied!" : "Copy customer link"}
+                    </button>
+                    <button
+                      onClick={() => handleResetPin(p.id)}
+                      disabled={resettingId === p.id}
+                      className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 border border-[var(--line)] rounded px-2 py-1 hover:text-[var(--accent)] hover:border-[var(--accent)] disabled:opacity-50"
+                    >
+                      {resettingId === p.id ? "…" : "Reset PIN"}
+                    </button>
+                  </div>
                 )}
               </div>
+              {isAdmin && (
+                <div className="mt-1 text-right">
+                  <button
+                    onClick={() => handleRegenerateLink(p.id)}
+                    disabled={regeneratingId === p.id}
+                    className="text-[10px] font-mono uppercase tracking-wide text-[var(--ink)]/30 hover:text-[var(--rust)] disabled:opacity-50"
+                  >
+                    {regeneratingId === p.id ? "Regenerating…" : "Regenerate link"}
+                  </button>
+                </div>
+              )}
               {revealedPins[p.id] && (
                 <p className="text-xs mt-2 bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded px-2 py-1.5 font-mono-num">
                   New PIN for {p.customer}:{" "}
                   <span className="font-semibold">{revealedPins[p.id]}</span> — share this with
                   them now, it won&apos;t be shown again.
+                </p>
+              )}
+              {linkError[p.id] && (
+                <p className="text-xs mt-2 bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded px-2 py-1.5 break-all">
+                  Couldn&apos;t copy automatically — here&apos;s the customer link:{" "}
+                  <span className="font-mono">{linkError[p.id]}</span>
                 </p>
               )}
             </div>

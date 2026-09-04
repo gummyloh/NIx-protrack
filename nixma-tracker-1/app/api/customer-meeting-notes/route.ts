@@ -13,24 +13,31 @@ export async function GET() {
   }
 
   let project_id: string;
-  let password: string;
+  let password: string | undefined;
+  let access_token: string | undefined;
   try {
     const parsed = JSON.parse(raw);
     project_id = parsed.project_id;
     password = parsed.password;
-    if (!project_id || !password) throw new Error("Malformed cookie");
+    access_token = parsed.access_token;
+    if (!project_id || !(password || access_token)) throw new Error("Malformed cookie");
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid session" }, { status: 401 });
   }
 
-  // The RPC re-checks the password against the projects table itself --
-  // this route trusts the cookie only to avoid re-prompting, not as the
-  // actual security boundary. Even a forged/stale cookie value can't
-  // retrieve notes without the real password matching in the database.
-  const { data, error } = await supabase.rpc("list_client_meeting_notes", {
-    p_project_id: project_id,
-    p_password: password,
-  });
+  // The RPC re-checks the password (or token) against the projects table
+  // itself -- this route trusts the cookie only to avoid re-prompting, not
+  // as the actual security boundary. Even a forged/stale cookie value can't
+  // retrieve notes without the real password/token matching in the database.
+  const { data, error } = access_token
+    ? await supabase.rpc("list_client_meeting_notes_by_token", {
+        p_project_id: project_id,
+        p_token: access_token,
+      })
+    : await supabase.rpc("list_client_meeting_notes", {
+        p_project_id: project_id,
+        p_password: password,
+      });
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
