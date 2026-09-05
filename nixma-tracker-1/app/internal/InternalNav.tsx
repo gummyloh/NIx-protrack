@@ -69,9 +69,7 @@ export default function InternalNav({ isAdmin }: { isAdmin: boolean }) {
     <header className="sticky top-0 z-40 bg-[var(--paper)]/95 backdrop-blur border-b border-[var(--line)]">
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-3 flex items-center justify-between gap-6 flex-wrap">
         <div className="min-w-0">
-          <p className="text-[10px] tracking-[0.25em] uppercase text-[var(--accent)] font-mono">
-            Nixma Test Solutions
-          </p>
+          <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-4 w-auto" />
           <p className="text-base font-semibold leading-tight truncate">
             {isProjectsList ? "Project Tracker" : project?.name ?? "Project Tracker"}
           </p>

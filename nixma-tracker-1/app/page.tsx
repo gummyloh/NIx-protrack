@@ -5,9 +5,7 @@ export default function Home() {
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-lg w-full">
         <div className="mb-10">
-          <p className="text-xs tracking-[0.2em] uppercase text-[var(--accent)] font-mono mb-2">
-            Nixma Test Solutions
-          </p>
+          <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2" />
           <h1 className="text-3xl font-semibold leading-tight">
             Project Tracker
           </h1>

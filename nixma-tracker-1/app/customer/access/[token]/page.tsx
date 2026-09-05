@@ -35,9 +35,7 @@ export default function CustomerAccessLink() {
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-sm w-full border border-[var(--line)] rounded-lg p-6 bg-white/60 text-center">
-        <p className="text-xs tracking-[0.2em] uppercase text-[var(--accent)] font-mono mb-2">
-          Nixma Test Solutions
-        </p>
+        <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2 mx-auto" />
         {error ? (
           <>
             <h1 className="text-xl font-semibold mb-1">Link not valid</h1>

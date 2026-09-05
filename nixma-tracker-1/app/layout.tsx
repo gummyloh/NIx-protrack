@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Nixma Project Tracker",
-  description: "Live project schedule status — Nixma Test Solutions",
+  title: "Nixtecs Project Tracker",
+  description: "Live project schedule status — Nixtecs Sdn Bhd",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Nixma",
+    title: "Nixtecs",
   },
 };
 

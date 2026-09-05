@@ -31,9 +31,7 @@ export default function TeamLogin() {
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-sm w-full">
-        <p className="text-xs tracking-[0.2em] uppercase text-[var(--accent)] font-mono mb-2">
-          Nixma Test Solutions
-        </p>
+        <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2" />
         <h1 className="text-2xl font-semibold">Team sign in</h1>
         <p className="text-sm text-[var(--ink)]/60 mt-1 mb-8">
           Sign in to see the project list and manage schedules.

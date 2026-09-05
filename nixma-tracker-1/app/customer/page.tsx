@@ -101,9 +101,7 @@ export default function CustomerView() {
     <main className="p-6 md:p-10 max-w-5xl mx-auto">
       <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
         <div>
-          <p className="text-xs tracking-[0.2em] uppercase text-[var(--accent)] font-mono mb-2">
-            Nixma Test Solutions
-          </p>
+          <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2" />
           <h1 className="text-2xl font-semibold">
             {project?.name ?? "Project status"}
           </h1>

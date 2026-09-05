@@ -34,9 +34,7 @@ export default function TeamSignup() {
     return (
       <main className="min-h-screen flex items-center justify-center p-8">
         <div className="max-w-sm w-full text-center">
-          <p className="text-xs tracking-[0.2em] uppercase text-[var(--accent)] font-mono mb-4">
-            Nixma Test Solutions
-          </p>
+          <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-6 w-auto mb-4 mx-auto" />
           <h1 className="text-2xl font-semibold mb-3">Account created</h1>
           <p className="text-sm text-[var(--ink)]/70">
             {done === "confirm_email"
@@ -57,9 +55,7 @@ export default function TeamSignup() {
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-sm w-full">
-        <p className="text-xs tracking-[0.2em] uppercase text-[var(--accent)] font-mono mb-2">
-          Nixma Test Solutions
-        </p>
+        <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2" />
         <h1 className="text-2xl font-semibold">Create team account</h1>
         <p className="text-sm text-[var(--ink)]/60 mt-1 mb-8">
           New accounts need admin approval before they can access the tracker.
