@@ -36,10 +36,18 @@ interface ClientUpdate {
   snapshot: ClientSnapshot;
 }
 
+interface ClientPhoto {
+  id: string;
+  caption: string | null;
+  taken_date: string;
+  url: string | null;
+}
+
 export default function CustomerView() {
   const [update, setUpdate] = useState<ClientUpdate | null>(null);
   const [project, setProject] = useState<ProjectRow | null>(null);
   const [notes, setNotes] = useState<MeetingNote[]>([]);
+  const [photos, setPhotos] = useState<ClientPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -54,11 +62,13 @@ export default function CustomerView() {
       // The customer page renders only the last snapshot the team
       // explicitly published -- never a live query -- so what's shown here
       // is always exactly what the team chose to share, as of when they
-      // clicked "Publish".
-      const [updateRes, projectRes, notesRes] = await Promise.all([
+      // clicked "Publish". Photos work the same way -- only ones an admin
+      // has explicitly flagged "Show to customer" ever reach this page.
+      const [updateRes, projectRes, notesRes, photosRes] = await Promise.all([
         fetch("/api/customer-update").then((r) => r.json()),
         fetch("/api/customer-project").then((r) => r.json()),
         fetch("/api/customer-meeting-notes").then((r) => r.json()),
+        fetch("/api/customer-photos").then((r) => r.json()),
       ]);
       if (!updateRes.ok || !projectRes.ok) {
         router.replace("/customer/login");
@@ -67,6 +77,7 @@ export default function CustomerView() {
       setUpdate(updateRes.update as ClientUpdate | null);
       setProject(projectRes.project as ProjectRow);
       setNotes(notesRes.ok ? notesRes.notes : []);
+      setPhotos(photosRes.ok ? photosRes.photos : []);
       setLoading(false);
     })();
   }, [router]);
@@ -295,6 +306,31 @@ export default function CustomerView() {
             ))}
           </div>
         </>
+      )}
+
+      {photos.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-3">
+            Photos
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {photos.map((p) => (
+              <div key={p.id} className="border border-[var(--line)] rounded-lg overflow-hidden bg-white/60">
+                <div className="aspect-square bg-[var(--line)]">
+                  {p.url && (
+                    <img src={p.url} alt={p.caption ?? ""} className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="p-2.5">
+                  {p.caption && <p className="text-xs font-medium truncate">{p.caption}</p>}
+                  <p className="text-[10px] text-[var(--ink)]/40 font-mono-num mt-1">
+                    {fmtNoteDate(p.taken_date)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {notes.length > 0 && (

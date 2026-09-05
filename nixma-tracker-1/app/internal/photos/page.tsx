@@ -135,6 +135,27 @@ export default function PhotosPage() {
     else await loadPhotos();
   }
 
+  // Toggling this is the only thing that puts a photo in front of the
+  // customer -- everything in this archive stays internal-only until an
+  // admin explicitly flags it. Optimistic update with rollback on failure,
+  // same pattern as the rest of this page's mutations.
+  async function toggleCustomerVisible(photo: PhotoWithUrl) {
+    const next = !photo.visible_to_customer;
+    setPhotos((prev) =>
+      prev.map((p) => (p.id === photo.id ? { ...p, visible_to_customer: next } : p))
+    );
+    const { error: err } = await supabase
+      .from("photos")
+      .update({ visible_to_customer: next })
+      .eq("id", photo.id);
+    if (err) {
+      setError(err.message);
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === photo.id ? { ...p, visible_to_customer: !next } : p))
+      );
+    }
+  }
+
   return (
     <main className="p-6 md:p-10 max-w-6xl mx-auto">
       <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
@@ -147,8 +168,9 @@ export default function PhotosPage() {
           </Link>
           <h1 className="text-2xl font-semibold mt-1">Photo Archive</h1>
           <p className="text-sm text-[var(--ink)]/60">
-            Internal record for revisions and future rebuilds -- not shown to
-            the customer.
+            Internal record for revisions and future rebuilds. Check &ldquo;Show
+            to customer&rdquo; on any photo you want included on their status
+            page -- everything else here stays internal.
           </p>
         </div>
       </div>
@@ -236,7 +258,12 @@ export default function PhotosPage() {
           {photos.map((p) => {
             const task = tasks.find((t) => t.id === p.task_id);
             return (
-              <div key={p.id} className="border border-[var(--line)] rounded-lg overflow-hidden bg-white/60">
+              <div
+                key={p.id}
+                className={`border rounded-lg overflow-hidden bg-white/60 ${
+                  p.visible_to_customer ? "border-[var(--accent)]" : "border-[var(--line)]"
+                }`}
+              >
                 <div className="aspect-square bg-[var(--line)] relative">
                   {p.url ? (
                     <img src={p.url} alt={p.caption ?? ""} className="w-full h-full object-cover" />
@@ -245,14 +272,28 @@ export default function PhotosPage() {
                       No preview
                     </div>
                   )}
+                  {p.visible_to_customer && (
+                    <span className="absolute top-1.5 left-1.5 text-[9px] font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-1.5 py-0.5">
+                      Shown to customer
+                    </span>
+                  )}
                 </div>
                 <div className="p-2.5">
                   {p.caption && <p className="text-xs font-medium truncate">{p.caption}</p>}
                   {task && <p className="text-xs text-[var(--ink)]/50 truncate">{task.description}</p>}
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-[10px] text-[var(--ink)]/40 font-mono-num">
-                      {fmtDate(p.taken_date)}
-                    </p>
+                  <p className="text-[10px] text-[var(--ink)]/40 font-mono-num mt-1">
+                    {fmtDate(p.taken_date)}
+                  </p>
+                  <label className="flex items-center gap-1.5 mt-2 text-[10px] text-[var(--ink)]/60">
+                    <input
+                      type="checkbox"
+                      checked={p.visible_to_customer}
+                      onChange={() => toggleCustomerVisible(p)}
+                      className="accent-[var(--accent)]"
+                    />
+                    Show to customer
+                  </label>
+                  <div className="flex justify-end mt-1">
                     <button
                       onClick={() => handleDelete(p)}
                       className="text-[10px] text-[var(--ink)]/40 hover:text-[var(--rust)]"

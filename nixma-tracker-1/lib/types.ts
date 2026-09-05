@@ -71,6 +71,7 @@ export interface Photo {
   taken_by: string | null;
   taken_date: string;
   created_at: string;
+  visible_to_customer: boolean;
 }
 
 export interface ProjectRow {
