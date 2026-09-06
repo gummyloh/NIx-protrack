@@ -1,10 +1,10 @@
-# Nixma Project Tracker
+# Nixtecs Project Tracker
 
-A live project schedule tracker for Nixma Test Solutions, built as a
+A live project schedule tracker for Nixtecs, built as a
 reusable multi-project template. Piloted on the Liquick GO Pack N Seal
 project for Teleflex Malaysia (MH063).
 
-Live at: https://nixma-project-tracker-gummylohs-projects.vercel.app
+Live at: https://nixtecs.vercel.app
 
 ## Stack
 
@@ -116,5 +116,5 @@ Override via `.env.local` if pointing at a different Supabase project.
 
 ## Deploying
 
-Deployed to Vercel under the project name `nixma-project-tracker`. Project
+Deployed to Vercel under the project name `nixtecs`. Project
 settings auto-detect Next.js; no special build configuration needed.
