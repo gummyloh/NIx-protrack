@@ -1,34 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export const DEFAULT_PROJECT_ID = "liquick-go-pack-n-seal";
 
 /**
- * Reads ?project=<id> from the URL client-side (not Next's useSearchParams,
- * to avoid forcing every page into a Suspense boundary just for this).
- * Falls back to the original Teleflex project so every existing link and
- * bookmark keeps working unchanged.
+ * Reads ?project=<id> from the URL.
  *
- * Re-reads on every pathname change (not just on mount): the /internal
- * layout -- and the nav bar it renders -- stays mounted across
- * client-side navigations within /internal, so a mount-only effect here
- * would freeze at whatever project was active when that layout first
- * mounted and never notice a later project switch, even though the page
- * content underneath re-fetches correctly for the new project.
+ * Uses next/navigation's useSearchParams() rather than manually parsing
+ * window.location.search in an effect: the manual version only updated on
+ * pathname change (or on mount), so a query-string-only navigation --
+ * exactly what switching projects while staying on the same route does --
+ * could be served from Next's client router cache without ever re-running
+ * that effect, leaving the nav frozen on a previous project indefinitely.
+ * useSearchParams() is the framework's own reactive primitive for this and
+ * doesn't have that gap, at the cost of needing a Suspense boundary
+ * somewhere above (added in app/internal/layout.tsx).
  */
 export function useProjectId(): string {
-  const pathname = usePathname();
-  const [projectId, setProjectId] = useState(DEFAULT_PROJECT_ID);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get("project");
-    setProjectId(fromUrl || DEFAULT_PROJECT_ID);
-  }, [pathname]);
-
-  return projectId;
+  const searchParams = useSearchParams();
+  return searchParams.get("project") || DEFAULT_PROJECT_ID;
 }
 
 /** Builds an internal link that carries the current project along, unless

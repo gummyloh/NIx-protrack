@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { DEFAULT_PROJECT_ID } from "@/lib/useProjectId";
@@ -153,8 +153,10 @@ export default function InternalLayout({
 
   return (
     <InternalAuthProvider value={{ isAdmin: profile?.is_admin ?? false }}>
-      <InternalNav isAdmin={profile?.is_admin ?? false} />
-      {children}
+      <Suspense fallback={null}>
+        <InternalNav isAdmin={profile?.is_admin ?? false} />
+        {children}
+      </Suspense>
     </InternalAuthProvider>
   );
 }
