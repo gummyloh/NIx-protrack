@@ -13,12 +13,6 @@ import {
   STATUS_COLOR,
 } from "@/lib/schedule";
 
-interface ProjectRow {
-  name: string;
-  customer: string;
-  project_code: string | null;
-}
-
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.round(diffMs / 60000);
@@ -33,27 +27,18 @@ function timeAgo(iso: string): string {
 export default function Dashboard() {
   const projectId = useProjectId();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [project, setProject] = useState<ProjectRow | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [{ data: taskData }, { data: projectData }] = await Promise.all([
-        supabase
-          .from("tasks")
-          .select("*")
-          .eq("project_id", projectId)
-          .eq("is_active", true)
-          .order("id", { ascending: true }),
-        supabase
-          .from("projects")
-          .select("name, customer, project_code")
-          .eq("id", projectId)
-          .single(),
-      ]);
+      const { data: taskData } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("is_active", true)
+        .order("id", { ascending: true });
       setTasks((taskData as Task[]) || []);
-      setProject(projectData as ProjectRow);
       setLoading(false);
     })();
   }, [projectId]);
@@ -142,19 +127,6 @@ export default function Dashboard() {
 
   return (
     <main className="p-6 md:p-10 max-w-6xl mx-auto">
-      <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
-        <div>
-          <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2" />
-          <h1 className="text-2xl font-semibold">
-            {project?.name ?? "Project Dashboard"}
-          </h1>
-          <p className="text-sm text-[var(--ink)]/60 mt-1">
-            {project?.customer}
-            {project?.project_code ? ` · ${project.project_code}` : ""}
-          </p>
-        </div>
-      </div>
-
       {/* Hero status band */}
       <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-6">
         <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
