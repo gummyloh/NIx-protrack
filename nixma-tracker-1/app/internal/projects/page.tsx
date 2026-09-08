@@ -4,13 +4,29 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { ProjectRow } from "@/lib/types";
-import { withProject, DEFAULT_PROJECT_ID } from "@/lib/useProjectId";
+import { withProject } from "@/lib/useProjectId";
 import { useInternalAuth } from "@/lib/internalAuth";
+
+interface DeletedProjectRow {
+  id: string;
+  name: string;
+  customer: string;
+  project_code: string | null;
+  deleted_at: string;
+}
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso + "T12:00:00Z");
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// "Restorable until 3:45 PM" reads better on a page you might revisit than
+// a ticking countdown would, and doesn't need a timer re-rendering this
+// page every second for something with a 5-hour window.
+function restorableUntil(deletedAtIso: string): string {
+  const expires = new Date(deletedAtIso).getTime() + 5 * 60 * 60 * 1000;
+  return new Date(expires).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 function slugify(s: string): string {
@@ -40,6 +56,9 @@ export default function ProjectsPage() {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<Record<string, string>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedProjectRow[]>([]);
 
   async function loadProjects() {
     setLoading(true);
@@ -50,9 +69,20 @@ export default function ProjectsPage() {
     setLoading(false);
   }
 
+  async function loadRecentlyDeleted() {
+    const { data, error: err } = await supabase.rpc("list_recently_deleted_projects");
+    if (!err) setRecentlyDeleted((data as DeletedProjectRow[]) || []);
+  }
+
   useEffect(() => {
     loadProjects();
   }, []);
+
+  useEffect(() => {
+    // list_recently_deleted_projects is admin-only server-side -- don't
+    // fire it for a non-admin who lands on this route.
+    if (isAdmin) loadRecentlyDeleted();
+  }, [isAdmin]);
 
   async function handleCreate() {
     if (!name.trim() || !customer.trim()) {
@@ -66,13 +96,15 @@ export default function ProjectsPage() {
     }
     setCreating(true);
     setError(null);
+    // p_source_project_id deliberately omitted -- the RPC's own default
+    // (the standalone master-template project) is what should be cloned,
+    // not any particular live customer project.
     const { data, error: err } = await supabase.rpc("create_project_from_template", {
       p_new_project_id: newId,
       p_name: name.trim(),
       p_customer: customer.trim(),
       p_project_code: projectCode.trim() || null,
       p_kickoff_date: kickoffDate,
-      p_source_project_id: DEFAULT_PROJECT_ID,
     });
     setCreating(false);
     if (err) {
@@ -164,6 +196,45 @@ export default function ProjectsPage() {
     await copyLink(projectId, data as string);
   }
 
+  // Soft delete: the project drops off every list immediately, but the row
+  // (and everything under it) stays in the database for 5 hours in case
+  // this was a mistake -- see "Recently deleted" below. Past that window
+  // it's gone for good; list_recently_deleted_projects purges it for real
+  // the next time anyone loads this page.
+  async function handleDeleteProject(p: ProjectRow) {
+    const confirmed = window.confirm(
+      `Delete ${p.name}?\n\n` +
+        `It'll disappear from the project list right away, but you'll have ` +
+        `5 hours to restore it from "Recently deleted" below if this was a mistake. ` +
+        `After that it's gone for good, including its tasks, meeting notes, and photos.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(p.id);
+    setError(null);
+    const { error: err } = await supabase.rpc("delete_project", { p_project_id: p.id });
+    setDeletingId(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setProjects((prev) => prev.filter((row) => row.id !== p.id));
+    await loadRecentlyDeleted();
+  }
+
+  async function handleRestoreProject(id: string) {
+    setRestoringId(id);
+    setError(null);
+    const { error: err } = await supabase.rpc("restore_project", { p_project_id: id });
+    setRestoringId(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setRecentlyDeleted((prev) => prev.filter((row) => row.id !== id));
+    await loadProjects();
+  }
+
   return (
     <main className="p-6 md:p-10 max-w-4xl mx-auto">
       <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
@@ -171,7 +242,7 @@ export default function ProjectsPage() {
           <h1 className="text-2xl font-semibold">Projects</h1>
           <p className="text-sm text-[var(--ink)]/60">
             {isAdmin
-              ? "Every new project starts as a full copy of Liquick GO Pack N Seal’s 74-task structure, with dates shifted to your new kickoff date. Switch which tasks apply in that project’s Task Table afterward."
+              ? "Every new project starts as a full copy of the master template's 74-task structure, with dates shifted to your new kickoff date. Switch which tasks apply in that project's Task Table afterward."
               : "Projects you've been added to."}
           </p>
         </div>
@@ -324,13 +395,20 @@ export default function ProjectsPage() {
                 )}
               </div>
               {isAdmin && (
-                <div className="mt-1 text-right">
+                <div className="mt-1 flex items-center justify-end gap-3">
                   <button
                     onClick={() => handleRegenerateLink(p.id)}
                     disabled={regeneratingId === p.id}
                     className="text-[10px] font-mono uppercase tracking-wide text-[var(--ink)]/30 hover:text-[var(--rust)] disabled:opacity-50"
                   >
                     {regeneratingId === p.id ? "Regenerating…" : "Regenerate link"}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProject(p)}
+                    disabled={deletingId === p.id}
+                    className="text-[10px] font-mono uppercase tracking-wide text-[var(--ink)]/30 hover:text-[var(--rust)] disabled:opacity-50"
+                  >
+                    {deletingId === p.id ? "Deleting…" : "Delete"}
                   </button>
                 </div>
               )}
@@ -349,6 +427,35 @@ export default function ProjectsPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {isAdmin && recentlyDeleted.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xs font-mono uppercase tracking-wide text-[var(--rust)]/70 mb-3">
+            Recently deleted ({recentlyDeleted.length})
+          </h2>
+          <div className="border border-[var(--rust)]/20 rounded-lg bg-[var(--rust)]/[0.03] divide-y divide-[var(--rust)]/10">
+            {recentlyDeleted.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-4 p-4">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{p.name}</p>
+                  <p className="text-xs text-[var(--ink)]/50 truncate">
+                    {p.customer}
+                    {p.project_code ? ` · ${p.project_code}` : ""} — restorable until{" "}
+                    {restorableUntil(p.deleted_at)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleRestoreProject(p.id)}
+                  disabled={restoringId === p.id}
+                  className="text-xs bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50 shrink-0"
+                >
+                  {restoringId === p.id ? "Restoring…" : "Restore"}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </main>
