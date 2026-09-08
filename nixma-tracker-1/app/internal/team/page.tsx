@@ -30,6 +30,7 @@ export default function TeamAdmin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [summary, setSummary] = useState<Record<string, MembershipSummary>>({});
@@ -120,6 +121,62 @@ export default function TeamAdmin() {
     setProfiles((prev) =>
       prev.map((p) => (p.id === id ? { ...p, ...changes } : p))
     );
+  }
+
+  // Permanently removes their profile, every project_members row, and (via
+  // the service-role step in the API route) their actual Supabase Auth
+  // login -- not the same thing as "Revoke access", which just flips
+  // approved back to false and leaves the account intact to be
+  // re-approved later. The RPC behind this route re-checks admin status,
+  // blocks deleting yourself, and refuses to delete the last remaining
+  // admin, so those protections hold even if this button is ever reachable
+  // from somewhere that skipped the checks below.
+  async function deleteUser(p: Profile) {
+    const confirmed = window.confirm(
+      `Permanently delete ${p.full_name || p.email}'s account?\n\n` +
+        `This removes their login and every project they've been added to. ` +
+        `This can't be undone -- they'd need to sign up again from scratch.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(p.id);
+    setError(null);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      setError("Your session expired -- please sign in again.");
+      setDeletingId(null);
+      return;
+    }
+    try {
+      const res = await fetch("/api/team-delete-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ user_id: p.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Couldn't delete that account.");
+        setDeletingId(null);
+        return;
+      }
+      if (data.authDeleted === false) {
+        // Profile + memberships are already gone (RPC succeeded) -- the
+        // account can't do anything in the app anymore even though this
+        // part failed, so surface it but don't treat it as a hard error.
+        setError(
+          `${p.email} was removed from the app, but their login couldn't be fully deleted (${data.authError || "unknown reason"}).`
+        );
+      }
+      setProfiles((prev) => prev.filter((row) => row.id !== p.id));
+    } catch {
+      setError("Couldn't reach the server -- check your connection and try again.");
+    }
+    setDeletingId(null);
   }
 
   if (loading) {
@@ -229,12 +286,21 @@ export default function TeamAdmin() {
                   <p className="font-medium truncate">{p.full_name || "—"}</p>
                   <p className="text-xs text-[var(--ink)]/50 truncate">{p.email}</p>
                 </div>
-                <button
-                  onClick={() => patch(p.id, { approved: true })}
-                  className="bg-[var(--accent)] text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:opacity-90 shrink-0"
-                >
-                  Approve
-                </button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    onClick={() => deleteUser(p)}
+                    disabled={deletingId === p.id}
+                    className="text-xs underline text-[var(--ink)]/40 hover:text-[var(--rust)] disabled:opacity-50"
+                  >
+                    {deletingId === p.id ? "Deleting…" : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => patch(p.id, { approved: true })}
+                    className="bg-[var(--accent)] text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:opacity-90 shrink-0"
+                  >
+                    Approve
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -276,6 +342,13 @@ export default function TeamAdmin() {
                     className="underline text-[var(--rust)]/70 hover:text-[var(--rust)]"
                   >
                     Revoke access
+                  </button>
+                  <button
+                    onClick={() => deleteUser(p)}
+                    disabled={deletingId === p.id}
+                    className="underline text-[var(--rust)]/70 hover:text-[var(--rust)] disabled:opacity-50"
+                  >
+                    {deletingId === p.id ? "Deleting…" : "Delete"}
                   </button>
                 </div>
               )}
