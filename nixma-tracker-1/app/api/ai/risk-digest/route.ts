@@ -76,7 +76,14 @@ export async function POST(req: NextRequest) {
 
   const rows = (taskData as TaskForDigest[]) || [];
   if (rows.length === 0) {
-    return NextResponse.json({ ok: true, digest: [], generated_at: new Date().toISOString() });
+    return NextResponse.json({
+      ok: true,
+      digest: [],
+      generated_at: new Date().toISOString(),
+      input_tokens: 0,
+      output_tokens: 0,
+      estimated_cost_usd: 0,
+    });
   }
 
   const notesBlock = rows
@@ -105,15 +112,19 @@ routine progress updates with no real concern in them. If nothing looks
 risky, return an empty array: []`;
 
   let digest: DigestItem[];
+  let usage: { inputTokens: number; outputTokens: number };
+  let estimatedCostUsd: number | null;
   try {
-    const raw = await callClaude({
+    const result = await callClaude({
       model: AI_MODELS.haiku,
       prompt,
       maxTokens: 1500,
     });
-    const cleaned = raw.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    const cleaned = result.text.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     digest = JSON.parse(cleaned);
     if (!Array.isArray(digest)) throw new Error("not an array");
+    usage = result.usage;
+    estimatedCostUsd = result.estimatedCostUsd;
   } catch (e) {
     return NextResponse.json(
       {
@@ -129,9 +140,21 @@ risky, return an empty array: []`;
 
   const generatedAt = new Date().toISOString();
   const admin = getSupabaseAdmin();
-  await admin
-    .from("ai_risk_digests")
-    .upsert({ project_id: projectId, content: digest, generated_at: generatedAt });
+  await admin.from("ai_risk_digests").upsert({
+    project_id: projectId,
+    content: digest,
+    generated_at: generatedAt,
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    estimated_cost_usd: estimatedCostUsd,
+  });
 
-  return NextResponse.json({ ok: true, digest, generated_at: generatedAt });
+  return NextResponse.json({
+    ok: true,
+    digest,
+    generated_at: generatedAt,
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    estimated_cost_usd: estimatedCostUsd,
+  });
 }

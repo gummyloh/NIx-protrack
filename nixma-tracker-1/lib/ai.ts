@@ -15,12 +15,27 @@ export const AI_MODELS = {
   sonnet: "claude-sonnet-5",
 } as const;
 
+// $ per model, per million tokens (input, output) -- used only to show a
+// rough estimated cost next to a result, not for actual billing (Anthropic's
+// own usage dashboard at console.anthropic.com/settings/usage is the source
+// of truth for that). Update these if pricing changes.
+const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
+  [AI_MODELS.haiku]: { input: 1, output: 5 },
+  [AI_MODELS.sonnet]: { input: 2, output: 10 },
+};
+
+export interface ClaudeResult {
+  text: string;
+  usage: { inputTokens: number; outputTokens: number };
+  estimatedCostUsd: number | null;
+}
+
 export async function callClaude(opts: {
   model: string;
   prompt: string;
   system?: string;
   maxTokens?: number;
-}): Promise<string> {
+}): Promise<ClaudeResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -56,5 +71,17 @@ export async function callClaude(opts: {
   if (!block?.text) {
     throw new Error("Claude API returned no text content.");
   }
-  return block.text;
+
+  const inputTokens = (data.usage?.input_tokens as number) ?? 0;
+  const outputTokens = (data.usage?.output_tokens as number) ?? 0;
+  const price = PRICE_PER_MTOK[opts.model];
+  const estimatedCostUsd = price
+    ? (inputTokens / 1_000_000) * price.input + (outputTokens / 1_000_000) * price.output
+    : null;
+
+  return {
+    text: block.text,
+    usage: { inputTokens, outputTokens },
+    estimatedCostUsd,
+  };
 }

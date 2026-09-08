@@ -30,6 +30,12 @@ interface RiskDigestItem {
   severity: "high" | "medium";
 }
 
+interface RiskDigestUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number | null;
+}
+
 export default function Dashboard() {
   const projectId = useProjectId();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -37,6 +43,7 @@ export default function Dashboard() {
 
   const [riskDigest, setRiskDigest] = useState<RiskDigestItem[] | null>(null);
   const [riskDigestGeneratedAt, setRiskDigestGeneratedAt] = useState<string | null>(null);
+  const [riskDigestUsage, setRiskDigestUsage] = useState<RiskDigestUsage | null>(null);
   const [riskDigestLoading, setRiskDigestLoading] = useState(false);
   const [riskDigestError, setRiskDigestError] = useState<string | null>(null);
 
@@ -62,15 +69,25 @@ export default function Dashboard() {
     (async () => {
       const { data } = await supabase
         .from("ai_risk_digests")
-        .select("content, generated_at")
+        .select("content, generated_at, input_tokens, output_tokens, estimated_cost_usd")
         .eq("project_id", projectId)
         .maybeSingle();
       if (data) {
         setRiskDigest(data.content as RiskDigestItem[]);
         setRiskDigestGeneratedAt(data.generated_at as string);
+        setRiskDigestUsage(
+          data.input_tokens != null
+            ? {
+                inputTokens: data.input_tokens as number,
+                outputTokens: data.output_tokens as number,
+                estimatedCostUsd: data.estimated_cost_usd as number | null,
+              }
+            : null
+        );
       } else {
         setRiskDigest(null);
         setRiskDigestGeneratedAt(null);
+        setRiskDigestUsage(null);
       }
     })();
   }, [projectId]);
@@ -101,6 +118,11 @@ export default function Dashboard() {
       } else {
         setRiskDigest(data.digest as RiskDigestItem[]);
         setRiskDigestGeneratedAt(data.generated_at as string);
+        setRiskDigestUsage({
+          inputTokens: data.input_tokens as number,
+          outputTokens: data.output_tokens as number,
+          estimatedCostUsd: data.estimated_cost_usd as number | null,
+        });
       }
     } catch {
       setRiskDigestError("Couldn't reach the server -- check your connection and try again.");
@@ -379,12 +401,15 @@ export default function Dashboard() {
                 </div>
               );
             })}
-            {riskDigestGeneratedAt && (
-              <p className="text-xs text-[var(--ink)]/40 font-mono-num pt-1">
-                Checked {timeAgo(riskDigestGeneratedAt)}
-              </p>
-            )}
           </div>
+        )}
+        {riskDigestGeneratedAt && riskDigestUsage && (
+          <p className="text-xs text-[var(--ink)]/40 font-mono-num pt-3 mt-3 border-t border-[var(--line)]">
+            Checked {timeAgo(riskDigestGeneratedAt)} · {(riskDigestUsage.inputTokens + riskDigestUsage.outputTokens).toLocaleString()} tokens
+            {" "}({riskDigestUsage.inputTokens.toLocaleString()} in / {riskDigestUsage.outputTokens.toLocaleString()} out)
+            {riskDigestUsage.estimatedCostUsd != null &&
+              ` · ~$${riskDigestUsage.estimatedCostUsd < 0.01 ? riskDigestUsage.estimatedCostUsd.toFixed(4) : riskDigestUsage.estimatedCostUsd.toFixed(2)}`}
+          </p>
         )}
       </div>
 
