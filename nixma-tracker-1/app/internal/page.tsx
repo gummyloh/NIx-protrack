@@ -24,10 +24,21 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
+interface RiskDigestItem {
+  task_id: number;
+  signal: string;
+  severity: "high" | "medium";
+}
+
 export default function Dashboard() {
   const projectId = useProjectId();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [riskDigest, setRiskDigest] = useState<RiskDigestItem[] | null>(null);
+  const [riskDigestGeneratedAt, setRiskDigestGeneratedAt] = useState<string | null>(null);
+  const [riskDigestLoading, setRiskDigestLoading] = useState(false);
+  const [riskDigestError, setRiskDigestError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -42,6 +53,60 @@ export default function Dashboard() {
       setLoading(false);
     })();
   }, [projectId]);
+
+  // Loads whatever was cached by a previous "Refresh" click (by anyone on
+  // the project, not just you) -- never calls Claude on its own. Phase 1 of
+  // the AI layer is manually triggered on purpose, so this page load never
+  // spends a token by itself.
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("ai_risk_digests")
+        .select("content, generated_at")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (data) {
+        setRiskDigest(data.content as RiskDigestItem[]);
+        setRiskDigestGeneratedAt(data.generated_at as string);
+      } else {
+        setRiskDigest(null);
+        setRiskDigestGeneratedAt(null);
+      }
+    })();
+  }, [projectId]);
+
+  async function refreshRiskDigest() {
+    setRiskDigestLoading(true);
+    setRiskDigestError(null);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      setRiskDigestError("Your session expired -- please sign in again.");
+      setRiskDigestLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/ai/risk-digest", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ project_id: projectId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setRiskDigestError(data.error || "Couldn't generate a risk digest.");
+      } else {
+        setRiskDigest(data.digest as RiskDigestItem[]);
+        setRiskDigestGeneratedAt(data.generated_at as string);
+      }
+    } catch {
+      setRiskDigestError("Couldn't reach the server -- check your connection and try again.");
+    }
+    setRiskDigestLoading(false);
+  }
 
   const today = useMemo(() => new Date(), []);
   const leaf = useMemo(() => tasks.filter((t) => !t.is_summary), [tasks]);
@@ -265,6 +330,62 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Risk digest -- AI layer, phase 1. Manually triggered, internal only. */}
+      <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mt-6">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <h2 className="font-medium">Risk digest</h2>
+          <button
+            onClick={refreshRiskDigest}
+            disabled={riskDigestLoading}
+            className="text-xs bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50 shrink-0"
+          >
+            {riskDigestLoading ? "Scanning\u2026" : "Refresh risk digest"}
+          </button>
+        </div>
+        <p className="text-xs text-[var(--ink)]/40 mb-4">
+          Scans status notes for risk signals in the prose — blockers, open questions, tight deadlines — that the on-track/at-risk/delayed tags above don't catch, since those only look at dates. AI-generated, so treat it as a prompt to go check, not a verdict.
+        </p>
+        {riskDigestError && (
+          <div className="mb-3 text-sm text-[var(--rust)] bg-[var(--rust)]/10 border border-[var(--rust)]/30 rounded px-3 py-2">
+            {riskDigestError}
+          </div>
+        )}
+        {riskDigest === null ? (
+          <p className="text-sm text-[var(--ink)]/50">Not checked yet — click “Refresh risk digest” to scan current status notes.</p>
+        ) : riskDigest.length === 0 ? (
+          <p className="text-sm text-[var(--ink)]/50">
+            No risk signals found in status notes.
+            {riskDigestGeneratedAt && ` Checked ${timeAgo(riskDigestGeneratedAt)}.`}
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {riskDigest.map((item, i) => {
+              const task = tasks.find((t) => t.id === item.task_id);
+              const color = item.severity === "high" ? "var(--rust)" : "var(--amber)";
+              return (
+                <div key={i} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{task?.description || `Task #${item.task_id}`}</p>
+                    <p className="text-xs text-[var(--ink)]/60 mt-0.5">{item.signal}</p>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border shrink-0"
+                    style={{ color, borderColor: color + "55", backgroundColor: color + "12" }}
+                  >
+                    {item.severity === "high" ? "High" : "Medium"}
+                  </span>
+                </div>
+              );
+            })}
+            {riskDigestGeneratedAt && (
+              <p className="text-xs text-[var(--ink)]/40 font-mono-num pt-1">
+                Checked {timeAgo(riskDigestGeneratedAt)}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Recent activity */}
