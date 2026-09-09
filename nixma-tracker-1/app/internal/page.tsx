@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Task } from "@/lib/types";
 import { useProjectId } from "@/lib/useProjectId";
+import UpdateAnalyzer from "./UpdateAnalyzer";
 import {
   computeStatus,
   daysBehind,
@@ -47,19 +48,21 @@ export default function Dashboard() {
   const [riskDigestLoading, setRiskDigestLoading] = useState(false);
   const [riskDigestError, setRiskDigestError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const { data: taskData } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("project_id", projectId)
-        .eq("is_active", true)
-        .order("id", { ascending: true });
-      setTasks((taskData as Task[]) || []);
-      setLoading(false);
-    })();
+  const loadTasks = useCallback(async () => {
+    setLoading(true);
+    const { data: taskData } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("is_active", true)
+      .order("id", { ascending: true });
+    setTasks((taskData as Task[]) || []);
+    setLoading(false);
   }, [projectId]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   // Loads whatever was cached by a previous "Refresh" click (by anyone on
   // the project, not just you) -- never calls Claude on its own. Phase 1 of
@@ -412,6 +415,11 @@ export default function Dashboard() {
           </p>
         )}
       </div>
+
+      {/* Post an update -- AI layer, phase 2. Drafts changes for review;
+          refreshing tasks here so an Applied suggestion shows up in the
+          stats above immediately rather than needing a manual reload. */}
+      <UpdateAnalyzer projectId={projectId} onApplied={loadTasks} />
 
       {/* Recent activity */}
       <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mt-6">
