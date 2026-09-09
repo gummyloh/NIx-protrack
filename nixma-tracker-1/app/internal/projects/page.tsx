@@ -359,24 +359,24 @@ export default function ProjectsPage() {
               key={p.id}
               className="border border-[var(--line)] rounded-lg p-4 bg-white/60 hover:border-[var(--accent)] transition-colors"
             >
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <Link
                   href={withProject("/internal", p.id)}
-                  className="flex-1 flex items-center justify-between gap-4"
+                  className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-medium">{p.name}</p>
                     <p className="text-xs text-[var(--ink)]/50">
                       {p.customer}
                       {p.project_code ? ` · ${p.project_code}` : ""}
                     </p>
                   </div>
-                  <p className="text-xs text-[var(--ink)]/40 font-mono-num">
+                  <p className="text-xs text-[var(--ink)]/40 font-mono-num shrink-0">
                     Kickoff {fmtDate(p.kickoff_date)}
                   </p>
                 </Link>
                 {isAdmin && (
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
                     <button
                       onClick={() => handleCopyLink(p.id)}
                       disabled={copyingId === p.id}
