@@ -133,6 +133,28 @@ export interface PunchItem {
   source: string;
 }
 
+// A generic, per-discipline work-breakdown tree for fact-checked progress
+// ("what % of drawing 120 is actually done", confirmed with whoever's doing
+// the work) -- distinct from ModuleRow/StationRow above, which drive the
+// physical assembly-readiness gate, a different question. parent_id null
+// means a top-level node for that discipline; a node with children in the
+// tree should never have its own percent_complete treated as authoritative
+// -- see lib/progressRollup.ts, which always computes it from descendants
+// instead.
+export interface ProgressNode {
+  id: number;
+  project_id: string;
+  discipline: string;
+  parent_id: number | null;
+  name: string;
+  sequence: number;
+  percent_complete: number | null; // only meaningful when this node has no children
+  confirmed_by: string | null; // freeform name of whoever's word this number is based on
+  updated_by: string | null;
+  updated_at: string | null;
+  created_at: string;
+}
+
 export const DEPARTMENTS = [
   "Project Management",
   "Mechanical",
