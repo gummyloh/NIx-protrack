@@ -62,6 +62,9 @@ export default function InternalNav({ isAdmin }: { isAdmin: boolean }) {
         { label: "Module Rollup", href: withProject("/internal/modules", projectId) },
         { label: "Progress", href: withProject("/internal/progress", projectId) },
       ];
+  if (isAdmin) {
+    links.splice(1, 0, { label: "Portfolio", href: "/internal/portfolio" });
+  }
   if (isAdmin && !isProjectsList) {
     links.push({ label: "Team", href: withProject("/internal/team", projectId) });
   }
