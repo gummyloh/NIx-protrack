@@ -217,72 +217,95 @@ export default function Dashboard() {
 
   return (
     <main className="p-6 md:p-10 max-w-6xl mx-auto">
-      {/* Hero status band */}
+      {/* Status banner -- only shown when there's something to flag; a
+          project on schedule doesn't need a persistent alert bar. */}
+      {summary.overallDaysBehind > 0 && (
+        <div
+          className="panel p-4 mb-6 flex items-center justify-between gap-4 flex-wrap"
+          style={{
+            backgroundColor: overallColor + "0d",
+            borderColor: overallColor + "33",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <span
+              className="h-9 w-9 rounded-full flex items-center justify-center shrink-0"
+              style={{ backgroundColor: overallColor + "1a", color: overallColor }}
+            >
+              !
+            </span>
+            <div>
+              <p className="font-semibold" style={{ color: overallColor }}>
+                Project is {overallStatus}
+              </p>
+              <p className="text-xs text-[var(--ink)]/50 font-mono-num">
+                {progress.totalDurationDays} person-days total &middot; weighted by task duration
+              </p>
+            </div>
+          </div>
+          <span
+            className="text-xs font-medium px-2.5 py-1 rounded-full shrink-0"
+            style={{ backgroundColor: overallColor, color: "#fff" }}
+          >
+            {summary.overallDaysBehind > 3 ? "Delayed" : "At risk"}
+          </span>
+        </div>
+      )}
+
+      {/* Stat row -- five cards, each independently scannable, rather than
+          burying Overall Progress inside a combined hero band. */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        {[
+          {
+            label: "Overall progress",
+            value: `${progress.weightedPercent}%`,
+            sub: `${summary.completed} / ${summary.totalTasks} tasks`,
+            color: overallColor,
+          },
+          { label: "On track", value: summary.onTrack, sub: "tasks", color: "var(--accent)" },
+          { label: "At risk", value: summary.atRisk, sub: "tasks", color: "var(--amber)" },
+          { label: "Delayed", value: summary.delayed, sub: "tasks", color: "var(--rust)" },
+          { label: "Not started", value: summary.notStarted, sub: "tasks", color: "#8a8578" },
+        ].map((it) => (
+          <div key={it.label} className="panel p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-[var(--ink)]/50">{it.label}</span>
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: it.color }} />
+            </div>
+            <div className="text-2xl font-semibold font-mono-num" style={{ color: it.color }}>
+              {it.value}
+            </div>
+            <div className="text-xs text-[var(--ink)]/40 font-mono-num mt-0.5">{it.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Project progress */}
       <div className="panel p-5 mb-6">
-        <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-          <div>
-            <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
-              Overall status
-            </p>
-            <p className="text-xl font-semibold mt-1" style={{ color: overallColor }}>
-              {overallStatus}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
-              Overall progress
-            </p>
-            <p className="text-3xl font-semibold mt-1 font-mono-num" style={{ color: "var(--accent)" }}>
-              {progress.weightedPercent}%
-            </p>
-            <p className="text-xs text-[var(--ink)]/50 font-mono-num">
-              {summary.completed} / {summary.totalTasks} tasks complete
-            </p>
-          </div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium">Project progress</h2>
+          <span className="text-lg font-semibold font-mono-num" style={{ color: "var(--accent)" }}>
+            {progress.weightedPercent}%
+          </span>
         </div>
         <div className="h-2 bg-[var(--line)] rounded-full overflow-hidden mb-4">
-          <div
-            className="h-full bg-[var(--accent)]"
-            style={{ width: `${progress.weightedPercent}%` }}
-          />
+          <div className="h-full bg-[var(--accent)]" style={{ width: `${progress.weightedPercent}%` }} />
         </div>
-        <p className="text-xs text-[var(--ink)]/40 mb-4">
-          Weighted by task duration ({progress.totalDurationDays} person-days total) so a 20-day task counts more than a 1-day one &mdash; this is the number to use for payment milestones.
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: "On track", value: summary.onTrack, color: "var(--accent)" },
-            { label: "At risk", value: summary.atRisk, color: "var(--amber)" },
-            { label: "Delayed", value: summary.delayed, color: "var(--rust)" },
-            { label: "Not started", value: summary.notStarted, color: "#8a8578" },
-          ].map((it) => (
-            <div key={it.label} className="border border-[var(--line)] rounded-lg p-3">
-              <div className="text-2xl font-semibold font-mono-num" style={{ color: it.color }}>
-                {it.value}
+        <div className="grid md:grid-cols-2 gap-4">
+          {phaseProgress.map((p) => (
+            <div key={p.phase}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-[var(--ink)]/50">
+                  Phase {p.phase} &middot; {p.label}
+                </span>
+                <span className="text-xs font-mono-num text-[var(--ink)]/60">{p.avgPercent}%</span>
               </div>
-              <div className="text-xs text-[var(--ink)]/50 uppercase tracking-wide font-mono mt-0.5">
-                {it.label}
+              <div className="h-1.5 bg-[var(--line)] rounded-full overflow-hidden">
+                <div className="h-full bg-[var(--accent)]" style={{ width: `${p.avgPercent}%` }} />
               </div>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Phase progress */}
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
-        {phaseProgress.map((p) => (
-          <div key={p.phase} className="panel p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
-                Phase {p.phase} &middot; {p.label}
-              </span>
-              <span className="text-xs font-mono-num text-[var(--ink)]/60">{p.avgPercent}%</span>
-            </div>
-            <div className="h-1.5 bg-[var(--line)] rounded-full overflow-hidden">
-              <div className="h-full bg-[var(--accent)]" style={{ width: `${p.avgPercent}%` }} />
-            </div>
-          </div>
-        ))}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">

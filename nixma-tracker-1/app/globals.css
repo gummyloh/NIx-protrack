@@ -5,26 +5,30 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
 :root {
-  --paper: #faf8f3;
-  --surface: #fffefb;
+  --paper: #f5f6fa;
+  --surface: #ffffff;
   --ink: #1c2a24;
-  --line: #e4ddd0;
+  --line: #e6e8f0;
   --accent: #2f6f4f;
   --amber: #b7791f;
   --rust: #a13d2f;
   --muted: #8a8578;
-  --shadow-card: 0 1px 2px rgba(28, 42, 24, 0.04), 0 10px 24px -14px rgba(28, 42, 24, 0.18);
+  --shadow-card: 0 1px 2px rgba(20, 20, 43, 0.04), 0 10px 24px -14px rgba(20, 20, 43, 0.14);
+
+  /* Sidebar-only tokens -- the sidebar is a separate dark surface, not a
+     dark-mode variant of the page tokens above (main content stays light).
+     --sidebar-active doubles as the active-project chip and the active nav
+     link fill, matching the Figma mockup using the same indigo for both. */
+  --sidebar-bg: #14142b;
+  --sidebar-line: rgba(255, 255, 255, 0.08);
+  --sidebar-ink: #f2f2f7;
+  --sidebar-muted: rgba(242, 242, 247, 0.55);
+  --sidebar-active: #4f46e5;
+  --brand-gradient: linear-gradient(135deg, #6366f1, #a855f7);
 }
 
 body {
   background-color: var(--paper);
-  background-image: linear-gradient(
-      to right,
-      rgba(28, 42, 36, 0.035) 1px,
-      transparent 1px
-    ),
-    linear-gradient(to bottom, rgba(28, 42, 36, 0.035) 1px, transparent 1px);
-  background-size: 32px 32px;
   color: var(--ink);
 }
 
