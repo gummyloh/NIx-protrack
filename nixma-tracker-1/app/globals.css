@@ -19,12 +19,12 @@
      dark-mode variant of the page tokens above (main content stays light).
      --sidebar-active doubles as the active-project chip and the active nav
      link fill, matching the Figma mockup using the same indigo for both. */
-  --sidebar-bg: #14142b;
+  --sidebar-bg: #1f1f3d;
   --sidebar-line: rgba(255, 255, 255, 0.08);
   --sidebar-ink: #f2f2f7;
   --sidebar-muted: rgba(242, 242, 247, 0.55);
-  --sidebar-active: #4f46e5;
-  --brand-gradient: linear-gradient(135deg, #6366f1, #a855f7);
+  --sidebar-active: #6161ff;
+  --brand-gradient: linear-gradient(135deg, #6161ff, #a855f7);
 }
 
 body {
