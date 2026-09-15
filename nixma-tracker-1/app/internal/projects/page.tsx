@@ -289,7 +289,7 @@ export default function ProjectsPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Acme Bottle Capper"
-                className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+                className="field px-2 py-1.5 text-sm w-full"
               />
               {name && (
                 <p className="text-xs text-[var(--ink)]/40 mt-1">
@@ -305,7 +305,7 @@ export default function ProjectsPage() {
                 value={customer}
                 onChange={(e) => setCustomer(e.target.value)}
                 placeholder="e.g. Acme Corp, Penang"
-                className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+                className="field px-2 py-1.5 text-sm w-full"
               />
             </div>
             <div>
@@ -316,7 +316,7 @@ export default function ProjectsPage() {
                 value={projectCode}
                 onChange={(e) => setProjectCode(e.target.value)}
                 placeholder="e.g. MH070"
-                className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+                className="field px-2 py-1.5 text-sm w-full"
               />
             </div>
             <div>
@@ -327,7 +327,7 @@ export default function ProjectsPage() {
                 type="date"
                 value={kickoffDate}
                 onChange={(e) => setKickoffDate(e.target.value)}
-                className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+                className="field px-2 py-1.5 text-sm w-full"
               />
             </div>
           </div>

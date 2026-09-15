@@ -170,7 +170,7 @@ export default function Board() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tasks or owner…"
-          className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white min-w-[200px]"
+          className="field px-2.5 py-1.5 text-sm min-w-[200px]"
         />
       </div>
 
@@ -263,7 +263,7 @@ export default function Board() {
                                 defaultValue={t.assignee ?? ""}
                                 onBlur={(e) => updateTask(t.id, { assignee: e.target.value || null })}
                                 onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                                className="border border-[var(--line)] rounded px-1.5 py-0.5 text-xs w-28 bg-white"
+                                className="field px-1.5 py-0.5 text-xs w-28"
                               />
                             ) : (
                               <button
@@ -304,7 +304,7 @@ export default function Board() {
                                     percent_complete: 100,
                                   });
                                 }}
-                                className="border border-[var(--line)] rounded px-1.5 py-0.5 text-xs w-32 bg-white"
+                                className="field px-1.5 py-0.5 text-xs w-32"
                               />
                             ) : (
                               <button
@@ -373,7 +373,7 @@ export default function Board() {
                                     defaultValue={t.assignee ?? ""}
                                     onBlur={(e) => updateTask(t.id, { assignee: e.target.value || null })}
                                     onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                                    className="border border-[var(--line)] rounded px-1.5 py-0.5 text-xs w-28 bg-white"
+                                    className="field px-1.5 py-0.5 text-xs w-28"
                                   />
                                 ) : (
                                   <button
@@ -418,7 +418,7 @@ export default function Board() {
                                         percent_complete: 100,
                                       });
                                     }}
-                                    className="border border-[var(--line)] rounded px-1.5 py-0.5 text-xs w-32 bg-white"
+                                    className="field px-1.5 py-0.5 text-xs w-32"
                                   />
                                 ) : (
                                   <button

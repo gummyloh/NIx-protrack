@@ -207,7 +207,7 @@ export default function ProjectMembersPanel({
           value={inviteEmail}
           onChange={(e) => setInviteEmail(e.target.value)}
           placeholder="Add by email — someone@company.com"
-          className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white flex-1 min-w-[220px]"
+          className="field px-2.5 py-1.5 text-sm flex-1 min-w-[220px]"
         />
         <button
           type="submit"
@@ -233,7 +233,7 @@ export default function ProjectMembersPanel({
           <select
             value={selectedToAdd}
             onChange={(e) => setSelectedToAdd(e.target.value)}
-            className="border border-[var(--line)] rounded px-2 py-1.5 text-sm bg-white flex-1 min-w-[200px]"
+            className="field px-2 py-1.5 text-sm flex-1 min-w-[200px]"
           >
             <option value="">Or choose an existing account to add…</option>
             {addable.map((a) => (

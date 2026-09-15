@@ -265,7 +265,7 @@ export default function ModulesPage() {
               value={newModuleName}
               onChange={(e) => setNewModuleName(e.target.value)}
               placeholder="First module name, e.g. Pouch Loading"
-              className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white flex-1 min-w-[200px]"
+              className="field px-2.5 py-1.5 text-sm flex-1 min-w-[200px]"
             />
             <button
               onClick={handleAddModule}
@@ -281,7 +281,7 @@ export default function ModulesPage() {
               <select
                 value={cloneSourceId}
                 onChange={(e) => setCloneSourceId(e.target.value)}
-                className="border border-[var(--line)] rounded px-2 py-1.5 text-sm bg-white"
+                className="field px-2 py-1.5 text-sm"
               >
                 <option value="">Clone modules from…</option>
                 {otherProjects.map((p) => (
@@ -455,7 +455,7 @@ export default function ModulesPage() {
                               }))
                             }
                             placeholder="Log a punch item…"
-                            className="border border-[var(--line)] rounded px-2 py-1 text-xs bg-white flex-1 min-w-[160px]"
+                            className="field px-2 py-1 text-xs flex-1 min-w-[160px]"
                           />
                           <select
                             value={punchFormFor(s.station.id).severity}
@@ -468,7 +468,7 @@ export default function ModulesPage() {
                                 },
                               }))
                             }
-                            className="border border-[var(--line)] rounded px-1.5 py-1 text-xs bg-white"
+                            className="field px-1.5 py-1 text-xs"
                           >
                             <option value="blocker">Blocker</option>
                             <option value="minor">Minor</option>
@@ -482,7 +482,7 @@ export default function ModulesPage() {
                                 [s.station.id]: { ...punchFormFor(s.station.id), linkedTaskId: e.target.value },
                               }))
                             }
-                            className="border border-[var(--line)] rounded px-1.5 py-1 text-xs bg-white max-w-[160px]"
+                            className="field px-1.5 py-1 text-xs max-w-[160px]"
                           >
                             <option value="">No linked task</option>
                             {tasks.map((t) => (
@@ -510,7 +510,7 @@ export default function ModulesPage() {
                         setNewStationName((prev) => ({ ...prev, [m.module.id]: e.target.value }))
                       }
                       placeholder="New station name…"
-                      className="border border-[var(--line)] rounded px-2 py-1.5 text-xs bg-white flex-1 min-w-[160px]"
+                      className="field px-2 py-1.5 text-xs flex-1 min-w-[160px]"
                     />
                     <button
                       onClick={() => handleAddStation(m.module.id)}
@@ -533,7 +533,7 @@ export default function ModulesPage() {
             value={newModuleName}
             onChange={(e) => setNewModuleName(e.target.value)}
             placeholder="New module name…"
-            className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white flex-1 min-w-[200px]"
+            className="field px-2.5 py-1.5 text-sm flex-1 min-w-[200px]"
           />
           <button
             onClick={handleAddModule}

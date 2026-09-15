@@ -190,7 +190,7 @@ export default function PhotosPage() {
             <select
               value={taskId}
               onChange={(e) => setTaskId(e.target.value)}
-              className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+              className="field px-2 py-1.5 text-sm w-full"
             >
               <option value="">None</option>
               {tasks.map((t) => (
@@ -208,7 +208,7 @@ export default function PhotosPage() {
               type="date"
               value={takenDate}
               onChange={(e) => setTakenDate(e.target.value)}
-              className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+              className="field px-2 py-1.5 text-sm w-full"
             />
           </div>
           <div>
@@ -219,7 +219,7 @@ export default function PhotosPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
-              className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+              className="field px-2 py-1.5 text-sm w-full"
             />
           </div>
         </div>
@@ -231,7 +231,7 @@ export default function PhotosPage() {
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             placeholder="e.g. Rotary table assembly, before wiring"
-            className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+            className="field px-2 py-1.5 text-sm w-full"
           />
         </div>
         <div>

@@ -179,14 +179,14 @@ function ProgressNodeRow({
             max={100}
             value={percentDraft}
             onChange={(e) => setPercentDraft(e.target.value)}
-            className="border border-[var(--line)] rounded px-2 py-1 text-xs w-20 bg-white"
+            className="field px-2 py-1 text-xs w-20"
             placeholder="%"
           />
           <input
             value={confirmedByDraft}
             onChange={(e) => setConfirmedByDraft(e.target.value)}
             placeholder="Confirmed with (name)"
-            className="border border-[var(--line)] rounded px-2 py-1 text-xs bg-white flex-1 min-w-[140px]"
+            className="field px-2 py-1 text-xs flex-1 min-w-[140px]"
           />
           <button
             onClick={submitPercent}
@@ -208,7 +208,7 @@ function ProgressNodeRow({
             onKeyDown={(e) => {
               if (e.key === "Enter") submitAddChild();
             }}
-            className="border border-[var(--line)] rounded px-2 py-1 text-xs bg-white flex-1 min-w-[140px]"
+            className="field px-2 py-1 text-xs flex-1 min-w-[140px]"
           />
           <button
             onClick={submitAddChild}

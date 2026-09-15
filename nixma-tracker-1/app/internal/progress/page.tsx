@@ -184,13 +184,13 @@ export default function ProgressPage() {
             value={newDisciplineName}
             onChange={(e) => setNewDisciplineName(e.target.value)}
             placeholder="Discipline (e.g. Mechanical, Software, Wiring)"
-            className="border border-[var(--line)] rounded px-2 py-1.5 text-sm bg-white flex-1 min-w-[160px]"
+            className="field px-2 py-1.5 text-sm flex-1 min-w-[160px]"
           />
           <input
             value={newRootName}
             onChange={(e) => setNewRootName(e.target.value)}
             placeholder="First top-level item (e.g. MH063-00-00)"
-            className="border border-[var(--line)] rounded px-2 py-1.5 text-sm bg-white flex-1 min-w-[160px]"
+            className="field px-2 py-1.5 text-sm flex-1 min-w-[160px]"
           />
           <button
             onClick={createDiscipline}
@@ -249,7 +249,7 @@ function AddRootNode({ onAdd }: { onAdd: (name: string) => void }) {
             setName("");
           }
         }}
-        className="border border-[var(--line)] rounded px-2 py-1 text-xs bg-white flex-1"
+        className="field px-2 py-1 text-xs flex-1"
       />
       <button
         onClick={() => {

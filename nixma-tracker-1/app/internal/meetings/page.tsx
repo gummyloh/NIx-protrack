@@ -268,7 +268,7 @@ export default function MeetingsPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Week 3 progress sync"
-                className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+                className="field px-2 py-1.5 text-sm w-full"
               />
             </div>
             <div>
@@ -279,7 +279,7 @@ export default function MeetingsPage() {
                 type="date"
                 value={meetingDate}
                 onChange={(e) => setMeetingDate(e.target.value)}
-                className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white"
+                className="field px-2 py-1.5 text-sm w-full"
               />
             </div>
           </div>
@@ -324,7 +324,7 @@ export default function MeetingsPage() {
               onChange={(e) => setContent(e.target.value)}
               rows={10}
               placeholder="Paste or type meeting notes here…"
-              className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-full bg-white font-sans"
+              className="field px-2 py-1.5 text-sm w-full font-sans"
             />
             <p className="text-xs text-[var(--ink)]/40 mt-1">
               Stored as-is for now -- AI formatting isn&rsquo;t wired into the
@@ -389,7 +389,7 @@ export default function MeetingsPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
-              className="border border-[var(--line)] rounded px-2 py-1.5 text-sm w-40 bg-white"
+              className="field px-2 py-1.5 text-sm w-40"
             />
             <button
               onClick={handleSave}

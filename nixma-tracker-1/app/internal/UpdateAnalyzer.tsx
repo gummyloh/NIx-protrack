@@ -144,7 +144,7 @@ export default function UpdateAnalyzer({
         onChange={(e) => setText(e.target.value)}
         rows={4}
         placeholder="e.g. Today we built the POC for the mandrel and tested gripper force, but found the mandrel is damaging the pouch..."
-        className="w-full border border-[var(--line)] rounded px-3 py-2 text-sm bg-white mb-2"
+        className="w-full field px-3 py-2 text-sm mb-2"
       />
       <button
         onClick={analyze}
@@ -212,7 +212,7 @@ export default function UpdateAnalyzer({
                           setDrafts((prev) => ({ ...prev, [k]: { ...prev[k], percent: e.target.value } }))
                         }
                         placeholder="no change"
-                        className="border border-[var(--line)] rounded px-2 py-1 text-xs w-24 bg-white"
+                        className="field px-2 py-1 text-xs w-24"
                       />
                     </div>
                     <textarea
@@ -221,7 +221,7 @@ export default function UpdateAnalyzer({
                         setDrafts((prev) => ({ ...prev, [k]: { ...prev[k], note: e.target.value } }))
                       }
                       rows={2}
-                      className="w-full border border-[var(--line)] rounded px-2 py-1.5 text-xs bg-white"
+                      className="w-full field px-2 py-1.5 text-xs"
                       placeholder="Note to append (edit or clear as needed)"
                     />
                     <div className="flex items-center gap-2">

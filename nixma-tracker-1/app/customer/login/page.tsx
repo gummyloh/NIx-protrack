@@ -49,7 +49,7 @@ export default function CustomerLogin() {
           placeholder="6-digit PIN"
           maxLength={6}
           autoFocus
-          className="border border-[var(--line)] rounded px-3 py-2 text-sm w-full bg-white mb-3 tracking-[0.3em] text-center font-mono-num"
+          className="field px-3 py-2 text-sm w-full mb-3 tracking-[0.3em] text-center font-mono-num"
         />
         {error && (
           <p className="text-sm text-[var(--rust)] mb-3">{error}</p>

@@ -351,7 +351,7 @@ export default function InternalView() {
             value={publishNote}
             onChange={(e) => setPublishNote(e.target.value)}
             placeholder="Optional note for the client (e.g. what changed)"
-            className="border border-[var(--line)] rounded px-2.5 py-1.5 text-sm bg-white flex-1 min-w-[220px]"
+            className="field px-2.5 py-1.5 text-sm flex-1 min-w-[220px]"
           />
           <button
             onClick={handlePublish}
@@ -372,7 +372,7 @@ export default function InternalView() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tasks, owner, notes…"
-          className="border border-[var(--line)] rounded px-2.5 py-1 text-sm bg-white min-w-[200px]"
+          className="field px-2.5 py-1 text-sm min-w-[200px]"
         />
         <div className="flex items-center gap-3">
           <label className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
@@ -381,7 +381,7 @@ export default function InternalView() {
           <select
             value={deptFilter}
             onChange={(e) => setDeptFilter(e.target.value)}
-            className="border border-[var(--line)] rounded px-2 py-1 text-sm bg-white"
+            className="field px-2 py-1 text-sm"
           >
             <option>All</option>
             {DEPARTMENTS.map((d) => (
@@ -396,7 +396,7 @@ export default function InternalView() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-[var(--line)] rounded px-2 py-1 text-sm bg-white"
+            className="field px-2 py-1 text-sm"
           >
             <option>All</option>
             {Object.entries(STATUS_LABEL).map(([value, label]) => (
@@ -564,7 +564,7 @@ export default function InternalView() {
                         updateTask(t.id, { status_note: e.target.value })
                       }
                       placeholder="Optional note"
-                      className="border border-[var(--line)] rounded px-1.5 py-1 text-xs w-full bg-white"
+                      className="field px-1.5 py-1 text-xs w-full"
                     />
                   </td>
                   <td className="p-3">
