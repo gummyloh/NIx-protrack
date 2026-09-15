@@ -60,6 +60,20 @@ export default function ProjectsPage() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedProjectRow[]>([]);
 
+  const [checkingFit, setCheckingFit] = useState(false);
+  const [fitCheckError, setFitCheckError] = useState<string | null>(null);
+  const [flaggedTasks, setFlaggedTasks] = useState<
+    { task_id: number; task_label: string; reason: string }[] | null
+  >(null);
+  const [fitCheckUsage, setFitCheckUsage] = useState<{
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCostUsd: number | null;
+  } | null>(null);
+  const [selectedToDeactivate, setSelectedToDeactivate] = useState<Set<number>>(new Set());
+  const [deactivating, setDeactivating] = useState(false);
+  const [deactivated, setDeactivated] = useState(false);
+
   async function loadProjects() {
     setLoading(true);
     setError(null);
@@ -118,6 +132,69 @@ export default function ProjectsPage() {
     setShowForm(false);
     setNewProjectPin(row);
     await loadProjects();
+    if (row) checkTemplateFit(row.project_id);
+  }
+
+  // Runs once, automatically, right after a new project is created --
+  // catches the exact H090 failure mode (a cloned task that doesn't
+  // actually fit this project) at creation time instead of discovering it
+  // later on a live dashboard. Never auto-applies anything; see the
+  // review UI below.
+  async function checkTemplateFit(projectId: string) {
+    setCheckingFit(true);
+    setFitCheckError(null);
+    setFlaggedTasks(null);
+    setDeactivated(false);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      setFitCheckError("Your session expired -- please sign in again.");
+      setCheckingFit(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/ai/check-template-fit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ project_id: projectId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setFitCheckError(data.error || "Couldn't run the template-fit check.");
+      } else {
+        const flagged = data.flagged as { task_id: number; task_label: string; reason: string }[];
+        setFlaggedTasks(flagged);
+        setSelectedToDeactivate(new Set(flagged.map((f) => f.task_id)));
+        setFitCheckUsage({
+          inputTokens: data.input_tokens,
+          outputTokens: data.output_tokens,
+          estimatedCostUsd: data.estimated_cost_usd,
+        });
+      }
+    } catch {
+      setFitCheckError("Couldn't reach the server -- check your connection and try again.");
+    }
+    setCheckingFit(false);
+  }
+
+  async function handleDeactivateFlagged() {
+    if (selectedToDeactivate.size === 0) return;
+    setDeactivating(true);
+    setFitCheckError(null);
+    const { error: err } = await supabase
+      .from("tasks")
+      .update({ is_active: false })
+      .in("id", Array.from(selectedToDeactivate));
+    setDeactivating(false);
+    if (err) {
+      setFitCheckError(err.message);
+      return;
+    }
+    setDeactivated(true);
   }
 
   async function handleResetPin(projectId: string) {
@@ -275,6 +352,80 @@ export default function ProjectsPage() {
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {newProjectPin && (checkingFit || fitCheckError || flaggedTasks !== null) && (
+        <div className="panel p-4 mb-4">
+          <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-2">
+            Template fit check &mdash; {newProjectPin.project_id}
+          </p>
+          {checkingFit && (
+            <p className="text-sm text-[var(--ink)]/50">
+              Checking the cloned tasks against this project's name and customer…
+            </p>
+          )}
+          {fitCheckError && (
+            <p className="text-sm text-[var(--rust)]">{fitCheckError}</p>
+          )}
+          {!checkingFit && !fitCheckError && flaggedTasks !== null && (
+            deactivated ? (
+              <p className="text-sm text-[var(--accent)]">
+                Deactivated {selectedToDeactivate.size} task{selectedToDeactivate.size === 1 ? "" : "s"} --
+                switch them back on anytime in this project's Task Table if that was wrong.
+              </p>
+            ) : flaggedTasks.length === 0 ? (
+              <p className="text-sm text-[var(--ink)]/50">
+                Nothing flagged -- the cloned tasks look like a clean fit for this project.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-[var(--ink)]/60">
+                  These cloned tasks look like they might belong to a different kind of build.
+                  Unchecked ones stay as-is -- review before deactivating.
+                </p>
+                <div className="space-y-2">
+                  {flaggedTasks.map((f) => (
+                    <label key={f.task_id} className="flex items-start gap-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedToDeactivate.has(f.task_id)}
+                        onChange={(e) =>
+                          setSelectedToDeactivate((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(f.task_id);
+                            else next.delete(f.task_id);
+                            return next;
+                          })
+                        }
+                        className="mt-1 shrink-0"
+                      />
+                      <span>
+                        <span className="font-medium">{f.task_label}</span>
+                        <span className="block text-xs text-[var(--ink)]/50">{f.reason}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <button
+                  onClick={handleDeactivateFlagged}
+                  disabled={deactivating || selectedToDeactivate.size === 0}
+                  className="text-xs btn-primary px-3 py-1.5 font-medium disabled:opacity-50"
+                >
+                  {deactivating
+                    ? "Deactivating…"
+                    : `Deactivate selected (${selectedToDeactivate.size})`}
+                </button>
+              </div>
+            )
+          )}
+          {fitCheckUsage && !checkingFit && (
+            <p className="text-[10px] text-[var(--ink)]/30 font-mono-num mt-3 pt-2 border-t border-[var(--line)]">
+              {(fitCheckUsage.inputTokens + fitCheckUsage.outputTokens).toLocaleString()} tokens
+              {fitCheckUsage.estimatedCostUsd != null &&
+                ` · ~$${fitCheckUsage.estimatedCostUsd < 0.01 ? fitCheckUsage.estimatedCostUsd.toFixed(4) : fitCheckUsage.estimatedCostUsd.toFixed(2)}`}
+            </p>
+          )}
         </div>
       )}
 
