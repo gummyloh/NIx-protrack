@@ -255,7 +255,7 @@ export default function MeetingsPage() {
       )}
 
       {showForm && (
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-6 space-y-3">
+        <div className="panel p-5 mb-6 space-y-3">
           <p className="text-xs font-mono uppercase tracking-wide text-[var(--accent)]">
             {editingId ? "Editing note" : "New note"}
           </p>
@@ -394,7 +394,7 @@ export default function MeetingsPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="text-sm bg-[var(--accent)] text-white rounded px-4 py-1.5 font-medium disabled:opacity-50"
+              className="text-sm btn-primary px-4 py-1.5 font-medium disabled:opacity-50"
             >
               {saving ? "Saving…" : editingId ? "Update note" : "Save note"}
             </button>
@@ -434,7 +434,7 @@ export default function MeetingsPage() {
       ) : (
         <div className="space-y-4">
           {visibleNotes.map((n) => (
-            <div key={n.id} className="border border-[var(--line)] rounded-lg p-4 bg-white/60">
+            <div key={n.id} className="panel p-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <h3 className="font-medium">{n.title}</h3>

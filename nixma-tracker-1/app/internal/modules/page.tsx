@@ -255,7 +255,7 @@ export default function ModulesPage() {
       )}
 
       {modules.length === 0 && (
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-6 space-y-4">
+        <div className="panel p-5 mb-6 space-y-4">
           <p className="text-sm text-[var(--ink)]/70">
             No modules set up for this project yet. Start from scratch, or
             {isAdmin ? " clone the module/station structure from a similar past project." : " ask an admin to set these up."}
@@ -270,7 +270,7 @@ export default function ModulesPage() {
             <button
               onClick={handleAddModule}
               disabled={addingModule || !newModuleName.trim()}
-              className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90 disabled:opacity-50"
+              className="text-xs font-mono uppercase tracking-wide btn-primary px-3 py-2 hover:opacity-90 disabled:opacity-50"
             >
               {addingModule ? "Adding…" : "Add module"}
             </button>
@@ -307,7 +307,7 @@ export default function ModulesPage() {
           const badge = readinessBadge(m.ready, m.stations.length > 0);
           const isExpanded = expandedModules.has(m.module.id);
           return (
-            <div key={m.module.id} className="border border-[var(--line)] rounded-lg bg-white/60 overflow-hidden">
+            <div key={m.module.id} className="panel overflow-hidden">
               <button
                 onClick={() => toggleExpanded(m.module.id)}
                 className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
@@ -338,7 +338,7 @@ export default function ModulesPage() {
                   {m.stations.map((s) => {
                     const relatedTasks = tasksByStation.get(s.station.name) ?? [];
                     return (
-                      <div key={s.station.id} className="border border-[var(--line)] rounded-lg p-3 bg-white/70">
+                      <div key={s.station.id} className="panel p-3">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="font-medium text-sm">{s.station.name}</span>
                           <span
@@ -538,7 +538,7 @@ export default function ModulesPage() {
           <button
             onClick={handleAddModule}
             disabled={addingModule || !newModuleName.trim()}
-            className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90 disabled:opacity-50"
+            className="text-xs font-mono uppercase tracking-wide btn-primary px-3 py-2 hover:opacity-90 disabled:opacity-50"
           >
             {addingModule ? "Adding…" : "+ Add module"}
           </button>

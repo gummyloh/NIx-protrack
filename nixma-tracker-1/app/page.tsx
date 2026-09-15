@@ -14,7 +14,7 @@ export default function Home() {
         <div className="grid gap-4">
           <Link
             href="/login"
-            className="block border border-[var(--line)] bg-white/60 rounded-lg p-5 hover:border-[var(--accent)] transition-colors"
+            className="block panel p-5 hover:border-[var(--accent)] transition-colors"
           >
             <p className="font-mono text-xs uppercase tracking-wide text-[var(--ink)]/50 mb-1">
               Team
@@ -27,7 +27,7 @@ export default function Home() {
 
           <Link
             href="/customer"
-            className="block border border-[var(--line)] bg-white/60 rounded-lg p-5 hover:border-[var(--accent)] transition-colors"
+            className="block panel p-5 hover:border-[var(--accent)] transition-colors"
           >
             <p className="font-mono text-xs uppercase tracking-wide text-[var(--ink)]/50 mb-1">
               Customer

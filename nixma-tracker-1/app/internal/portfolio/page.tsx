@@ -172,17 +172,17 @@ export default function PortfolioPage() {
 
       {/* Stat strip -- current counts only, no invented trend arrows */}
       <div className="grid sm:grid-cols-3 gap-4 mb-8">
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60">
+        <div className="panel p-5">
           <p className="text-3xl font-semibold font-mono-num">{projects.length}</p>
           <p className="text-xs text-[var(--ink)]/50 mt-1">Active projects</p>
         </div>
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60">
+        <div className="panel p-5">
           <p className="text-3xl font-semibold font-mono-num" style={{ color: atRisk.length > 0 ? STATUS_COLOR.delayed : "var(--ink)" }}>
             {atRisk.length}
           </p>
           <p className="text-xs text-[var(--ink)]/50 mt-1">Flagged at risk or critical</p>
         </div>
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60">
+        <div className="panel p-5">
           <p className="text-3xl font-semibold font-mono-num">
             {totalDelayedTasks}
             <span className="text-base text-[var(--ink)]/40"> / {totalActiveTasks}</span>
@@ -200,7 +200,7 @@ export default function PortfolioPage() {
           {atRisk.length === 0 ? (
             <p className="text-sm text-[var(--ink)]/50">Nothing flagged -- every project's on track.</p>
           ) : (
-            <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)]">
+            <div className="panel divide-y divide-[var(--line)]">
               {atRisk
                 .sort((a, b) => b.summary.overallDaysBehind - a.summary.overallDaysBehind)
                 .map((p) => {
@@ -243,7 +243,7 @@ export default function PortfolioPage() {
           <h2 className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-3">
             Team
           </h2>
-          <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)]">
+          <div className="panel divide-y divide-[var(--line)]">
             {members.map((m) => (
               <div key={m.id} className="p-4">
                 <p className="font-medium text-sm">

@@ -132,7 +132,7 @@ export default function UpdateAnalyzer({
   }
 
   return (
-    <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mt-6">
+    <div className="panel p-5 mt-6">
       <h2 className="font-medium mb-1">Post an update</h2>
       <p className="text-xs text-[var(--ink)]/40 mb-3">
         Paste a raw update -- what happened today, what you found -- and Claude drafts
@@ -149,7 +149,7 @@ export default function UpdateAnalyzer({
       <button
         onClick={analyze}
         disabled={!text.trim() || analyzing}
-        className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50"
+        className="text-sm btn-primary px-3 py-1.5 font-medium disabled:opacity-50"
       >
         {analyzing ? "Analyzing…" : "Analyze update"}
       </button>

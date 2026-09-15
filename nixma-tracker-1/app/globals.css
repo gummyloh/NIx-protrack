@@ -6,11 +6,14 @@
 
 :root {
   --paper: #faf8f3;
+  --surface: #fffefb;
   --ink: #1c2a24;
   --line: #e4ddd0;
   --accent: #2f6f4f;
   --amber: #b7791f;
   --rust: #a13d2f;
+  --muted: #8a8578;
+  --shadow-card: 0 1px 2px rgba(28, 42, 24, 0.04), 0 10px 24px -14px rgba(28, 42, 24, 0.18);
 }
 
 body {
@@ -27,6 +30,75 @@ body {
 
 .font-mono-num {
   font-variant-numeric: tabular-nums;
+}
+
+/* Shared surface for every card/section panel across the app -- replaces
+   the old flat `border + bg-white/60` treatment with a warmer surface tone
+   and a soft two-layer shadow, so panels read as lifted off the grid
+   background rather than a slightly-translucent rectangle. */
+.panel {
+  border-radius: 0.875rem;
+  border: 1px solid var(--line);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 150ms ease;
+}
+
+/* Shared button base -- adds a real keyboard-focus ring (previously missing
+   app-wide) and consistent hover/disabled behavior. Padding stays with each
+   button instance since sizes genuinely vary (icon-only vs. full CTA). */
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
+}
+.btn-primary {
+  background-color: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover {
+  background-color: color-mix(in srgb, var(--accent) 88%, black);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.btn-secondary {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.btn-secondary:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--accent);
+}
+.btn-secondary:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Shared text-input treatment -- gives every form field a visible focus
+   ring (previously just a border-color swap) without needing a shadow. */
+.field {
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+  background-color: var(--surface);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 ::-webkit-scrollbar {

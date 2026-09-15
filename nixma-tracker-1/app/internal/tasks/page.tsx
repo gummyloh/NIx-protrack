@@ -294,7 +294,7 @@ export default function InternalView() {
         </div>
         <button
           onClick={handleExportPdf}
-          className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90 shrink-0"
+          className="text-xs font-mono uppercase tracking-wide btn-primary px-3 py-2 hover:opacity-90 shrink-0"
         >
           Export PDF
         </button>
@@ -328,7 +328,7 @@ export default function InternalView() {
 
       <SummaryCards summary={summary} progress={progress} />
 
-      <div className="mt-6 border border-[var(--line)] rounded-lg p-4 bg-white/60">
+      <div className="mt-6 panel p-4">
         <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
           <div>
             <h2 className="text-sm font-semibold">Publish update to client</h2>
@@ -356,7 +356,7 @@ export default function InternalView() {
           <button
             onClick={handlePublish}
             disabled={publishing}
-            className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90 disabled:opacity-50 shrink-0"
+            className="text-xs font-mono uppercase tracking-wide btn-primary px-3 py-2 hover:opacity-90 disabled:opacity-50 shrink-0"
           >
             {publishing ? "Publishing…" : "Publish"}
           </button>
@@ -422,7 +422,7 @@ export default function InternalView() {
         )}
       </div>
 
-      <div className="overflow-x-auto border border-[var(--line)] rounded-lg bg-white/60">
+      <div className="overflow-x-auto panel">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--line)] text-left text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
@@ -672,7 +672,7 @@ function SummaryCards({
   return (
     <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
       {items.map((it) => (
-        <div key={it.label} className="border border-[var(--line)] rounded-lg p-3 bg-white/60">
+        <div key={it.label} className="panel p-3">
           <div className="text-2xl font-semibold font-mono-num" style={{ color: it.color }}>
             {it.value}
           </div>

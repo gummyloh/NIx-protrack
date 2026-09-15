@@ -5,6 +5,20 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useProjectId, withProject } from "@/lib/useProjectId";
+import {
+  IconFolder,
+  IconGauge,
+  IconGrid,
+  IconImage,
+  IconNotes,
+  IconColumns,
+  IconTable,
+  IconBarChart,
+  IconLayers,
+  IconTrendUp,
+  IconUsers,
+  IconLogOut,
+} from "./icons";
 
 interface ProjectRow {
   name: string;
@@ -12,14 +26,26 @@ interface ProjectRow {
   project_code: string | null;
 }
 
+interface NavLink {
+  label: string;
+  path: string;
+  icon: (p: { className?: string }) => JSX.Element;
+}
+
+interface NavGroup {
+  label: string | null;
+  links: NavLink[];
+}
+
 /**
- * Fixed top bar shown on every internal page: brand + current project on the
- * left, section links on the right. Sticky so it stays put while scrolling.
+ * Left nav rail shown on every internal page (collapses to a horizontal
+ * icon strip below md). Brand + current project sit above the link groups;
+ * sign out sits pinned at the bottom.
  *
  * The Projects list (/internal/projects) is where you pick which project to
  * work in, so it has no "current project" yet -- the nav shows the generic
- * title there and skips the project-scoped links (Dashboard, Photos, etc.),
- * since those don't make sense until a project has been chosen.
+ * title there and skips the project-scoped groups, since those don't make
+ * sense until a project has been chosen.
  */
 export default function InternalNav({ isAdmin }: { isAdmin: boolean }) {
   const router = useRouter();
@@ -49,59 +75,146 @@ export default function InternalNav({ isAdmin }: { isAdmin: boolean }) {
     router.replace("/login");
   }
 
-  const links: Array<{ label: string; href: string }> = isProjectsList
-    ? [{ label: "Projects", href: "/internal/projects" }]
+  const groups: NavGroup[] = isProjectsList
+    ? [{ label: null, links: [{ label: "Projects", path: "/internal/projects", icon: IconFolder }] }]
     : [
-        { label: "Projects", href: "/internal/projects" },
-        { label: "Dashboard", href: withProject("/internal", projectId) },
-        { label: "Photos", href: withProject("/internal/photos", projectId) },
-        { label: "Meeting Notes", href: withProject("/internal/meetings", projectId) },
-        { label: "Board", href: withProject("/internal/board", projectId) },
-        { label: "Task Table", href: withProject("/internal/tasks", projectId) },
-        { label: "Gantt Chart", href: withProject("/internal/gantt", projectId) },
-        { label: "Module Rollup", href: withProject("/internal/modules", projectId) },
-        { label: "Progress", href: withProject("/internal/progress", projectId) },
+        {
+          label: null,
+          links: [{ label: "Projects", path: "/internal/projects", icon: IconFolder }],
+        },
+        {
+          label: "Overview",
+          links: [
+            { label: "Dashboard", path: "/internal", icon: IconGauge },
+            ...(isAdmin ? [{ label: "Portfolio", path: "/internal/portfolio", icon: IconGrid }] : []),
+          ],
+        },
+        {
+          label: "Field",
+          links: [
+            { label: "Photos", path: "/internal/photos", icon: IconImage },
+            { label: "Meeting Notes", path: "/internal/meetings", icon: IconNotes },
+          ],
+        },
+        {
+          label: "Schedule",
+          links: [
+            { label: "Board", path: "/internal/board", icon: IconColumns },
+            { label: "Task Table", path: "/internal/tasks", icon: IconTable },
+            { label: "Gantt Chart", path: "/internal/gantt", icon: IconBarChart },
+            { label: "Module Rollup", path: "/internal/modules", icon: IconLayers },
+            { label: "Progress", path: "/internal/progress", icon: IconTrendUp },
+          ],
+        },
+        ...(isAdmin
+          ? [{ label: "Admin", links: [{ label: "Team", path: "/internal/team", icon: IconUsers }] }]
+          : []),
       ];
-  if (isAdmin) {
-    links.splice(1, 0, { label: "Portfolio", href: "/internal/portfolio" });
-  }
-  if (isAdmin && !isProjectsList) {
-    links.push({ label: "Team", href: withProject("/internal/team", projectId) });
-  }
+
+  const allLinks = groups.flatMap((g) => g.links);
 
   return (
-    <header className="sticky top-0 z-40 bg-[var(--paper)]/95 backdrop-blur border-b border-[var(--line)]">
-      <div className="max-w-7xl mx-auto px-6 md:px-10 py-3 flex items-center justify-between gap-6 flex-wrap">
-        <div className="min-w-0">
-          <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-4 w-auto" />
-          <p className="text-base font-semibold leading-tight truncate">
+    <>
+      {/* Desktop rail */}
+      <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:w-60 md:z-40 border-r border-[var(--line)] bg-[var(--surface)]">
+        <div className="px-5 pt-5 pb-4 border-b border-[var(--line)]">
+          <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-4 w-auto mb-3" />
+          <p className="text-sm font-semibold leading-tight truncate">
             {isProjectsList ? "Project Tracker" : project?.name ?? "Project Tracker"}
           </p>
           {!isProjectsList && project && (
-            <p className="text-xs text-[var(--ink)]/50 truncate">
+            <p className="text-xs text-[var(--ink)]/50 truncate mt-0.5">
               {project.customer}
               {project.project_code ? ` · ${project.project_code}` : ""}
             </p>
           )}
         </div>
-        <nav className="flex items-center gap-4 text-[11px] font-mono uppercase tracking-wide flex-wrap">
-          {links.map((l) => (
-            <Link
-              key={l.label}
-              href={l.href}
-              className="text-[var(--ink)]/60 hover:text-[var(--accent)] underline underline-offset-4"
-            >
-              {l.label}
-            </Link>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+          {groups.map((group, i) => (
+            <div key={i}>
+              {group.label && (
+                <p className="px-2.5 mb-1.5 text-[10px] font-mono uppercase tracking-wide text-[var(--ink)]/40">
+                  {group.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.links.map((l) => {
+                  const href = withProject(l.path, projectId);
+                  const active = pathname === l.path;
+                  const LinkIcon = l.icon;
+                  return (
+                    <Link
+                      key={l.label}
+                      href={href}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
+                        active
+                          ? "bg-[var(--accent)]/10 text-[var(--accent)] font-medium"
+                          : "text-[var(--ink)]/70 hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+                      }`}
+                    >
+                      <LinkIcon className={`h-4 w-4 shrink-0 ${active ? "text-[var(--accent)]" : "text-[var(--ink)]/40"}`} />
+                      <span className="truncate">{l.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           ))}
+        </nav>
+
+        <div className="px-3 py-3 border-t border-[var(--line)]">
           <button
             onClick={signOut}
-            className="text-[var(--rust)]/70 hover:text-[var(--rust)] underline underline-offset-4 uppercase font-mono"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm text-[var(--rust)]/70 hover:bg-[var(--rust)]/10 hover:text-[var(--rust)] transition-colors"
           >
+            <IconLogOut className="h-4 w-4 shrink-0" />
             Sign out
           </button>
+        </div>
+      </aside>
+
+      {/* Mobile top bar: brand + horizontally scrollable icon strip */}
+      <header className="md:hidden sticky top-0 z-40 bg-[var(--paper)]/95 backdrop-blur border-b border-[var(--line)]">
+        <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-4 w-auto" />
+            <p className="text-sm font-semibold leading-tight truncate">
+              {isProjectsList ? "Project Tracker" : project?.name ?? "Project Tracker"}
+            </p>
+          </div>
+          <button
+            onClick={signOut}
+            className="shrink-0 flex items-center gap-1.5 text-xs text-[var(--rust)]/70 hover:text-[var(--rust)]"
+          >
+            <IconLogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
+        <nav className="flex items-center gap-1 overflow-x-auto px-3 pb-2.5 -mx-1">
+          {allLinks.map((l) => {
+            const href = withProject(l.path, projectId);
+            const active = pathname === l.path;
+            const LinkIcon = l.icon;
+            return (
+              <Link
+                key={l.label}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors ${
+                  active
+                    ? "bg-[var(--accent)]/10 text-[var(--accent)] font-medium"
+                    : "text-[var(--ink)]/60 hover:bg-[var(--surface)]"
+                }`}
+              >
+                <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+                {l.label}
+              </Link>
+            );
+          })}
         </nav>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }

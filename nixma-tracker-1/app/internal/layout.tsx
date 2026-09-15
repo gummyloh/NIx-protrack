@@ -142,7 +142,7 @@ export default function InternalLayout({
     return (
       <>
         <InternalNav isAdmin={profile?.is_admin ?? false} />
-        <main className="min-h-screen flex items-center justify-center">
+        <main className="md:pl-60 min-h-screen flex items-center justify-center">
           <p className="text-sm text-[var(--ink)]/50">
             {projectState === "denied" ? "Redirecting…" : "Checking project access…"}
           </p>
@@ -155,7 +155,7 @@ export default function InternalLayout({
     <InternalAuthProvider value={{ isAdmin: profile?.is_admin ?? false }}>
       <Suspense fallback={null}>
         <InternalNav isAdmin={profile?.is_admin ?? false} />
-        {children}
+        <div className="md:pl-60">{children}</div>
       </Suspense>
     </InternalAuthProvider>
   );

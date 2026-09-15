@@ -34,7 +34,7 @@ export default function CustomerAccessLink() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
-      <div className="max-w-sm w-full border border-[var(--line)] rounded-lg p-6 bg-white/60 text-center">
+      <div className="max-w-sm w-full panel p-6 text-center">
         <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2 mx-auto" />
         {error ? (
           <>

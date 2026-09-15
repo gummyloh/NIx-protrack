@@ -279,7 +279,7 @@ export default function ProjectsPage() {
       )}
 
       {showForm && (
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-6 space-y-3">
+        <div className="panel p-5 mb-6 space-y-3">
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 block mb-1">
@@ -334,7 +334,7 @@ export default function ProjectsPage() {
           <button
             onClick={handleCreate}
             disabled={creating}
-            className="text-sm bg-[var(--accent)] text-white rounded px-4 py-1.5 font-medium disabled:opacity-50"
+            className="text-sm btn-primary px-4 py-1.5 font-medium disabled:opacity-50"
           >
             {creating ? "Creating…" : "Create project"}
           </button>
@@ -357,7 +357,7 @@ export default function ProjectsPage() {
           {projects.map((p) => (
             <div
               key={p.id}
-              className="border border-[var(--line)] rounded-lg p-4 bg-white/60 hover:border-[var(--accent)] transition-colors"
+              className="panel p-4 hover:border-[var(--accent)] transition-colors"
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <Link

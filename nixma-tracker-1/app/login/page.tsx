@@ -46,7 +46,7 @@ export default function TeamLogin() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full border border-[var(--line)] rounded-lg px-3 py-2 bg-white/70 text-sm text-[var(--ink)] font-sans normal-case tracking-normal focus:outline-none focus:border-[var(--accent)]"
+              className="mt-1 block w-full field px-3 py-2 text-sm text-[var(--ink)] font-sans normal-case tracking-normal"
             />
           </label>
           <label className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
@@ -57,7 +57,7 @@ export default function TeamLogin() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full border border-[var(--line)] rounded-lg px-3 py-2 bg-white/70 text-sm text-[var(--ink)] font-sans normal-case tracking-normal focus:outline-none focus:border-[var(--accent)]"
+              className="mt-1 block w-full field px-3 py-2 text-sm text-[var(--ink)] font-sans normal-case tracking-normal"
             />
           </label>
 
@@ -70,7 +70,7 @@ export default function TeamLogin() {
           <button
             type="submit"
             disabled={busy}
-            className="bg-[var(--accent)] text-white rounded-lg px-4 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            className="btn-primary px-4 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>

@@ -179,7 +179,7 @@ export default function ProgressPage() {
       </div>
 
       {addingDiscipline && (
-        <div className="border border-[var(--line)] rounded-lg p-4 bg-white/60 mb-4 flex items-center gap-2 flex-wrap">
+        <div className="panel p-4 mb-4 flex items-center gap-2 flex-wrap">
           <input
             value={newDisciplineName}
             onChange={(e) => setNewDisciplineName(e.target.value)}
@@ -194,7 +194,7 @@ export default function ProgressPage() {
           />
           <button
             onClick={createDiscipline}
-            className="text-xs bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium"
+            className="text-xs btn-primary px-3 py-1.5 font-medium"
           >
             Create
           </button>
@@ -202,7 +202,7 @@ export default function ProgressPage() {
       )}
 
       {selectedDiscipline ? (
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60">
+        <div className="panel p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-medium">{selectedDiscipline}</h2>
             {overall != null && (

@@ -181,7 +181,7 @@ export default function PhotosPage() {
         </div>
       )}
 
-      <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-6 space-y-3">
+      <div className="panel p-5 mb-6 space-y-3">
         <div className="grid sm:grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50 block mb-1">

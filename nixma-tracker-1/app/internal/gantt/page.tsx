@@ -643,7 +643,7 @@ export default function GanttView() {
           {saving && <span className="text-xs text-[var(--ink)]/50">Saving…</span>}
           <button
             onClick={handleExportPdf}
-            className="text-xs font-mono uppercase tracking-wide bg-[var(--accent)] text-white rounded px-3 py-2 hover:opacity-90"
+            className="text-xs font-mono uppercase tracking-wide btn-primary px-3 py-2 hover:opacity-90"
           >
             Export PDF
           </button>
@@ -712,7 +712,7 @@ export default function GanttView() {
       {loading ? (
         <p className="text-sm text-[var(--ink)]/50">Loading…</p>
       ) : (
-        <div className="border border-[var(--line)] rounded-lg bg-white/60 overflow-x-auto">
+        <div className="panel overflow-x-auto">
           <div ref={containerRef} />
         </div>
       )}

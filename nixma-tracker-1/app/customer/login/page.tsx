@@ -32,7 +32,7 @@ export default function CustomerLogin() {
     <main className="min-h-screen flex items-center justify-center p-8">
       <form
         onSubmit={handleSubmit}
-        className="max-w-sm w-full border border-[var(--line)] rounded-lg p-6 bg-white/60"
+        className="max-w-sm w-full panel p-6"
       >
         <img src="/brand/nixtecs-logo.png" alt="Nixtecs" className="h-5 w-auto mb-2" />
         <h1 className="text-xl font-semibold mb-1">Project status</h1>
@@ -57,7 +57,7 @@ export default function CustomerLogin() {
         <button
           type="submit"
           disabled={loading || password.length !== 6}
-          className="w-full bg-[var(--accent)] text-white rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
+          className="w-full btn-primary px-3 py-2 text-sm font-medium disabled:opacity-50"
         >
           {loading ? "Checking…" : "View status"}
         </button>

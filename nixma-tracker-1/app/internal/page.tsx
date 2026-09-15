@@ -218,7 +218,7 @@ export default function Dashboard() {
   return (
     <main className="p-6 md:p-10 max-w-6xl mx-auto">
       {/* Hero status band */}
-      <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-6">
+      <div className="panel p-5 mb-6">
         <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
           <div>
             <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
@@ -271,7 +271,7 @@ export default function Dashboard() {
       {/* Phase progress */}
       <div className="grid md:grid-cols-2 gap-4 mb-6">
         {phaseProgress.map((p) => (
-          <div key={p.phase} className="border border-[var(--line)] rounded-lg p-4 bg-white/60">
+          <div key={p.phase} className="panel p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
                 Phase {p.phase} &middot; {p.label}
@@ -287,7 +287,7 @@ export default function Dashboard() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Needs attention */}
-        <div className="lg:col-span-2 border border-[var(--line)] rounded-lg p-5 bg-white/60">
+        <div className="lg:col-span-2 panel p-5">
           <h2 className="font-medium mb-4">Needs attention</h2>
           {needsAttention.length === 0 ? (
             <p className="text-sm text-[var(--ink)]/50">
@@ -323,7 +323,7 @@ export default function Dashboard() {
         </div>
 
         {/* Department health */}
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60">
+        <div className="panel p-5">
           <h2 className="font-medium mb-4">Department health</h2>
           <div className="space-y-3">
             {departmentHealth.map((d) => (
@@ -358,13 +358,13 @@ export default function Dashboard() {
       </div>
 
       {/* Risk digest -- AI layer, phase 1. Manually triggered, internal only. */}
-      <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mt-6">
+      <div className="panel p-5 mt-6">
         <div className="flex items-center justify-between gap-3 mb-1">
           <h2 className="font-medium">Risk digest</h2>
           <button
             onClick={refreshRiskDigest}
             disabled={riskDigestLoading}
-            className="text-xs bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50 shrink-0"
+            className="text-xs btn-primary px-3 py-1.5 font-medium disabled:opacity-50 shrink-0"
           >
             {riskDigestLoading ? "Scanning\u2026" : "Refresh risk digest"}
           </button>
@@ -422,7 +422,7 @@ export default function Dashboard() {
       <UpdateAnalyzer projectId={projectId} onApplied={loadTasks} />
 
       {/* Recent activity */}
-      <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mt-6">
+      <div className="panel p-5 mt-6">
         <h2 className="font-medium mb-4">Recent activity</h2>
         {recentActivity.length === 0 ? (
           <p className="text-sm text-[var(--ink)]/50">No updates logged yet.</p>

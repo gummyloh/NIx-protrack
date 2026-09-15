@@ -200,7 +200,7 @@ export default function ProjectMembersPanel({
 
       <form
         onSubmit={inviteByEmail}
-        className="border border-[var(--line)] rounded-lg p-4 bg-white/60 mb-3 flex items-center gap-3 flex-wrap"
+        className="panel p-4 mb-3 flex items-center gap-3 flex-wrap"
       >
         <input
           type="email"
@@ -212,7 +212,7 @@ export default function ProjectMembersPanel({
         <button
           type="submit"
           disabled={!inviteEmail.trim() || inviting}
-          className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50 shrink-0"
+          className="text-sm btn-primary px-3 py-1.5 font-medium disabled:opacity-50 shrink-0"
         >
           {inviting ? "Adding…" : "Add by email"}
         </button>
@@ -229,7 +229,7 @@ export default function ProjectMembersPanel({
       </p>
 
       {addable.length > 0 && (
-        <div className="border border-[var(--line)] rounded-lg p-4 bg-white/60 mb-3 flex items-center gap-3 flex-wrap">
+        <div className="panel p-4 mb-3 flex items-center gap-3 flex-wrap">
           <select
             value={selectedToAdd}
             onChange={(e) => setSelectedToAdd(e.target.value)}
@@ -245,7 +245,7 @@ export default function ProjectMembersPanel({
           <button
             onClick={addMember}
             disabled={!selectedToAdd || addingMember}
-            className="text-sm bg-[var(--accent)] text-white rounded px-3 py-1.5 font-medium disabled:opacity-50"
+            className="text-sm btn-primary px-3 py-1.5 font-medium disabled:opacity-50"
           >
             {addingMember ? "Adding…" : "Add to project"}
           </button>
@@ -253,7 +253,7 @@ export default function ProjectMembersPanel({
       )}
 
       {invites.length > 0 && (
-        <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)] mb-3">
+        <div className="panel divide-y divide-[var(--line)] mb-3">
           {invites.map((inv) => (
             <div key={inv.email} className="flex items-center justify-between gap-4 p-3">
               <p className="text-sm text-[var(--ink)]/70 truncate">
@@ -288,7 +288,7 @@ export default function ProjectMembersPanel({
           No one's been explicitly added yet -- only admins can open this project.
         </p>
       ) : (
-        <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)]">
+        <div className="panel divide-y divide-[var(--line)]">
           {members.map((m) => (
             <div key={m.user_id} className="flex items-center justify-between gap-4 p-4">
               <div className="min-w-0">

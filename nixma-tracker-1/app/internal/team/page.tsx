@@ -230,7 +230,7 @@ export default function TeamAdmin() {
         {projectsLoading ? (
           <p className="text-sm text-[var(--ink)]/50">Loading projects…</p>
         ) : (
-          <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)] overflow-hidden">
+          <div className="panel divide-y divide-[var(--line)] overflow-hidden">
             {projects.map((p) => {
               const isOpen = expanded.has(p.id);
               const s = summary[p.id];
@@ -279,7 +279,7 @@ export default function TeamAdmin() {
           <h2 className="text-xs font-mono uppercase tracking-wide text-[var(--amber)] mb-3">
             Awaiting approval ({pending.length})
           </h2>
-          <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)]">
+          <div className="panel divide-y divide-[var(--line)]">
             {pending.map((p) => (
               <div key={p.id} className="flex items-center justify-between gap-4 p-4">
                 <div className="min-w-0">
@@ -315,7 +315,7 @@ export default function TeamAdmin() {
           Account-wide settings -- admin status and login access apply across
           every project, not just this one.
         </p>
-        <div className="border border-[var(--line)] rounded-lg bg-white/60 divide-y divide-[var(--line)]">
+        <div className="panel divide-y divide-[var(--line)]">
           {allApproved.map((p) => (
             <div key={p.id} className="flex items-center justify-between gap-4 p-4">
               <div className="min-w-0">

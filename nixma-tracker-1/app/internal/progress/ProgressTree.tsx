@@ -191,7 +191,7 @@ function ProgressNodeRow({
           <button
             onClick={submitPercent}
             disabled={busy}
-            className="text-xs bg-[var(--accent)] text-white rounded px-2 py-1 disabled:opacity-50"
+            className="text-xs btn-primary px-2 py-1 disabled:opacity-50"
           >
             Save
           </button>
@@ -213,7 +213,7 @@ function ProgressNodeRow({
           <button
             onClick={submitAddChild}
             disabled={busy}
-            className="text-xs bg-[var(--accent)] text-white rounded px-2 py-1 disabled:opacity-50"
+            className="text-xs btn-primary px-2 py-1 disabled:opacity-50"
           >
             Add
           </button>

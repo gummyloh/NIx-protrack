@@ -119,7 +119,7 @@ export default function CustomerView() {
       </div>
 
       {!snapshot ? (
-        <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-8">
+        <div className="panel p-5 mb-8">
           <p className="text-sm text-[var(--ink)]/60">
             No progress update has been published yet. Check back soon, or
             reach out to your project contact.
@@ -127,7 +127,7 @@ export default function CustomerView() {
         </div>
       ) : (
         <>
-          <div className="border border-[var(--line)] rounded-lg p-5 bg-white/60 mb-2">
+          <div className="panel p-5 mb-2">
             <div className="flex items-baseline justify-between flex-wrap gap-2">
               <div>
                 <p className="text-xs font-mono uppercase tracking-wide text-[var(--ink)]/50">
@@ -192,7 +192,7 @@ export default function CustomerView() {
                 {snapshot.moduleRollup.map((mod) => (
                   <div
                     key={mod.name}
-                    className="border border-[var(--line)] rounded-lg p-5 bg-white/60"
+                    className="panel p-5"
                   >
                     <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                       <h3 className="font-medium">{mod.name}</h3>
@@ -264,7 +264,7 @@ export default function CustomerView() {
             {snapshot.departments.map((dept) => (
               <div
                 key={dept.department}
-                className="border border-[var(--line)] rounded-lg p-5 bg-white/60"
+                className="panel p-5"
               >
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-medium">{dept.department}</h2>
@@ -313,7 +313,7 @@ export default function CustomerView() {
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {photos.map((p) => (
-              <div key={p.id} className="border border-[var(--line)] rounded-lg overflow-hidden bg-white/60">
+              <div key={p.id} className="panel overflow-hidden">
                 <div className="aspect-square bg-[var(--line)]">
                   {p.url && (
                     <img src={p.url} alt={p.caption ?? ""} className="w-full h-full object-cover" />
@@ -337,7 +337,7 @@ export default function CustomerView() {
             Updates
           </h2>
           {notes.map((n) => (
-            <div key={n.id} className="border border-[var(--line)] rounded-lg p-5 bg-white/60">
+            <div key={n.id} className="panel p-5">
               <div className="flex items-baseline justify-between mb-2">
                 <h3 className="font-medium">{n.title}</h3>
                 <span className="text-xs text-[var(--ink)]/50 font-mono-num">
