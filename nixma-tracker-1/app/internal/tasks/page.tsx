@@ -664,7 +664,7 @@ function SummaryCards({
   const items = [
     { label: "Overall progress", value: `${progress.weightedPercent}%`, color: "var(--accent)" },
     { label: "Active tasks", value: summary.totalTasks, color: "var(--ink)" },
-    { label: "Completed", value: summary.completed, color: "#3a5a8c" },
+    { label: "Completed", value: summary.completed, color: "#323338" },
     { label: "On track", value: summary.onTrack, color: "var(--accent)" },
     { label: "At risk", value: summary.atRisk, color: "var(--amber)" },
     { label: "Delayed", value: summary.delayed, color: "var(--rust)" },

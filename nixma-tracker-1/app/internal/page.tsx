@@ -265,7 +265,7 @@ export default function Dashboard() {
           { label: "On track", value: summary.onTrack, sub: "tasks", color: "var(--accent)" },
           { label: "At risk", value: summary.atRisk, sub: "tasks", color: "var(--amber)" },
           { label: "Delayed", value: summary.delayed, sub: "tasks", color: "var(--rust)" },
-          { label: "Not started", value: summary.notStarted, sub: "tasks", color: "#8a8578" },
+          { label: "Not started", value: summary.notStarted, sub: "tasks", color: "var(--muted)" },
         ].map((it) => (
           <div key={it.label} className="panel p-4">
             <div className="flex items-center justify-between mb-2">

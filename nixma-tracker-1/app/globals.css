@@ -2,17 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
 
 :root {
   --paper: #f5f6fa;
   --surface: #ffffff;
   --ink: #1c2a24;
   --line: #e6e8f0;
-  --accent: #2f6f4f;
-  --amber: #b7791f;
-  --rust: #a13d2f;
-  --muted: #8a8578;
+  --accent: #00c875;
+  --amber: #fdab3d;
+  --rust: #e2445c;
+  --muted: #c4c4c4;
+  --completed: #323338;
   --shadow-card: 0 1px 2px rgba(20, 20, 43, 0.04), 0 10px 24px -14px rgba(20, 20, 43, 0.14);
 
   /* Sidebar-only tokens -- the sidebar is a separate dark surface, not a

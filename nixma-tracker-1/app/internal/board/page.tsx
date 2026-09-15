@@ -12,9 +12,9 @@ import { useTaskRealtime } from "@/lib/useTaskRealtime";
 type Priority = "High" | "Medium" | "Low";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
-  High: "#a13d2f",
-  Medium: "#b7791f",
-  Low: "#3a5a8c",
+  High: "#e2445c",
+  Medium: "#fdab3d",
+  Low: "#c4c4c4",
 };
 
 function priorityFor(status: ReturnType<typeof computeStatus>): Priority {

@@ -795,23 +795,23 @@ export default function GanttView() {
         /* Status overrides only the outline, so risk/delay still reads at a
            glance without hiding which department a bar belongs to. */
         .gantt .bar-wrapper.status-on_track .bar {
-          stroke: #2f6f4f;
+          stroke: #00c875;
           stroke-width: 1.5px;
         }
         .gantt .bar-wrapper.status-at_risk .bar {
-          stroke: #b7791f;
+          stroke: #fdab3d;
           stroke-width: 2px;
         }
         .gantt .bar-wrapper.status-delayed .bar {
-          stroke: #a13d2f;
+          stroke: #e2445c;
           stroke-width: 2px;
         }
         .gantt .bar-wrapper.status-completed .bar {
-          stroke: #3a5a8c;
+          stroke: #323338;
           stroke-width: 1.5px;
         }
         .gantt .bar-wrapper.status-not_started .bar {
-          stroke: #8a8578;
+          stroke: #c4c4c4;
           stroke-width: 1px;
         }
 
@@ -825,7 +825,7 @@ export default function GanttView() {
         }
 
         .gantt .popup-wrapper .action-btn {
-          background-color: var(--accent, #2f6f4f) !important;
+          background-color: var(--accent, #00c875) !important;
           color: white !important;
         }
         /* Compact monday.com-style type sizes */

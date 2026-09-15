@@ -69,11 +69,11 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 export const STATUS_COLOR: Record<TaskStatus, string> = {
-  not_started: "#8a8578",
-  on_track: "#2f6f4f",
-  at_risk: "#b7791f",
-  delayed: "#a13d2f",
-  completed: "#3a5a8c",
+  not_started: "#c4c4c4",
+  on_track: "#00c875",
+  at_risk: "#fdab3d",
+  delayed: "#e2445c",
+  completed: "#323338",
 };
 
 export interface OverallProgress {
