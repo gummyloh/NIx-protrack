@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { DEFAULT_PROJECT_ID } from "@/lib/useProjectId";
 import { InternalAuthProvider } from "@/lib/internalAuth";
 import InternalNav from "./InternalNav";
 
@@ -81,11 +80,21 @@ export default function InternalLayout({
     }
 
     let mounted = true;
+
+    const projectId = new URLSearchParams(window.location.search).get("project");
+    if (!projectId) {
+      // No project in the URL at all -- send them to pick one instead of
+      // silently defaulting to whichever project happened to exist first.
+      // A bare /internal used to mean "show Liquick"; with several real
+      // projects now, that's no longer a sensible default, just a stale one.
+      setProjectState("denied");
+      router.replace("/internal/projects");
+      return;
+    }
+
     setProjectState("checking");
 
     (async () => {
-      const projectId =
-        new URLSearchParams(window.location.search).get("project") || DEFAULT_PROJECT_ID;
       const { data, error } = await supabase.rpc("can_i_access_project", {
         p_project_id: projectId,
       });

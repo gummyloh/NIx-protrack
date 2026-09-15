@@ -22,10 +22,14 @@ export function useProjectId(): string {
   return searchParams.get("project") || DEFAULT_PROJECT_ID;
 }
 
-/** Builds an internal link that carries the current project along, unless
- * it's the default project (keeps URLs clean for the common case). */
+/** Builds an internal link that carries the current project along. Every
+ * project is always explicit in the URL now -- no privileged "default"
+ * project whose id gets silently omitted, since that's exactly what made
+ * a bare /internal link ambiguous between "go to Liquick" and "no project
+ * chosen yet" (see app/internal/layout.tsx, which now redirects a
+ * genuinely project-less /internal to the Projects list instead of
+ * guessing). */
 export function withProject(path: string, projectId: string): string {
-  if (projectId === DEFAULT_PROJECT_ID) return path;
   const sep = path.includes("?") ? "&" : "?";
   return `${path}${sep}project=${encodeURIComponent(projectId)}`;
 }
