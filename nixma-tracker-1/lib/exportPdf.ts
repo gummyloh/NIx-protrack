@@ -1,12 +1,14 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { Task } from "@/lib/types";
+import { Task, ProcurementPo, ProcurementFabItem } from "@/lib/types";
 import { computeStatus, summarize, overallProgress, STATUS_LABEL } from "@/lib/schedule";
 
 interface ExportOptions {
   projectName: string;
   projectCode?: string | null;
   customer?: string | null;
+  pos?: ProcurementPo[];
+  fabItems?: ProcurementFabItem[];
 }
 
 /**
@@ -102,6 +104,103 @@ export function exportTasksPdf(tasks: Task[], opts: ExportOptions) {
       }
     },
   });
+
+  // Procurement summary page (only added when data exists)
+  if ((opts.pos?.length ?? 0) > 0 || (opts.fabItems?.length ?? 0) > 0) {
+    doc.addPage();
+    doc.setFontSize(13);
+    doc.setTextColor(0);
+    doc.text("Procurement Summary", margin, 44);
+    doc.setFontSize(9);
+    doc.setTextColor(110);
+    doc.text(opts.projectName, margin, 58);
+    doc.setTextColor(0);
+
+    let yPos = 72;
+
+    if ((opts.pos?.length ?? 0) > 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(60);
+      doc.text("Purchase Orders", margin, yPos);
+      yPos += 4;
+
+      const poBody = (opts.pos ?? []).map(po => [
+        po.po_number || "—",
+        po.item_description,
+        po.supplier_name,
+        po.status.charAt(0).toUpperCase() + po.status.slice(1),
+        po.expected_delivery ? new Date(po.expected_delivery).toLocaleDateString("en-MY") : "—",
+        po.total_price != null ? `${po.currency} ${Number(po.total_price).toLocaleString("en-MY", { minimumFractionDigits: 2 })}` : "—",
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        margin: { left: margin, right: margin },
+        head: [["PO No.", "Item", "Supplier", "Status", "Expected Delivery", "Amount"]],
+        body: poBody,
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [55, 53, 47], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 55 },
+          1: { cellWidth: "auto" },
+          3: { cellWidth: 55, halign: "center" },
+          4: { cellWidth: 75, halign: "center" },
+          5: { cellWidth: 80, halign: "right" },
+        },
+        didParseCell: (data) => {
+          if (data.section === "body" && data.column.index === 3) {
+            const status = poBody[data.row.index]?.[3]?.toLowerCase();
+            const colors: Record<string, [number, number, number]> = {
+              issued: [47, 90, 140], partial: [140, 100, 20],
+              received: [47, 111, 79], cancelled: [140, 50, 40],
+            };
+            if (status && colors[status]) {
+              data.cell.styles.textColor = colors[status];
+              data.cell.styles.fontStyle = "bold";
+            }
+          }
+        },
+      });
+
+      yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16;
+    }
+
+    if ((opts.fabItems?.length ?? 0) > 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(60);
+      doc.text("Fabrication Items", margin, yPos);
+      yPos += 4;
+
+      const fabStatusLabel: Record<string, string> = {
+        not_started: "Not Started", in_fabrication: "In Fab",
+        qc: "QC", ready: "Ready", delivered: "Delivered", cancelled: "Cancelled",
+      };
+
+      const fabBody = (opts.fabItems ?? []).map(f => [
+        f.item_name,
+        f.drawing_ref || "—",
+        f.fab_vendor || "—",
+        fabStatusLabel[f.status] || f.status,
+        f.expected_completion ? new Date(f.expected_completion).toLocaleDateString("en-MY") : "—",
+        f.cost != null ? `${f.currency} ${Number(f.cost).toLocaleString("en-MY", { minimumFractionDigits: 2 })}` : "—",
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        margin: { left: margin, right: margin },
+        head: [["Item", "Drawing Ref", "Fabricator", "Status", "Due Date", "Cost"]],
+        body: fabBody,
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [55, 53, 47], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: "auto" },
+          3: { cellWidth: 55, halign: "center" },
+          4: { cellWidth: 65, halign: "center" },
+          5: { cellWidth: 80, halign: "right" },
+        },
+      });
+    }
+  }
 
   const filenameSafe = opts.projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   doc.save(`${filenameSafe || "project"}-status-${today.toISOString().slice(0, 10)}.pdf`);

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { Task, DEPARTMENTS } from "@/lib/types";
+import { Task, DEPARTMENTS, ProcurementPo, ProcurementFabItem } from "@/lib/types";
 import { useProjectId, withProject } from "@/lib/useProjectId";
 import {
   computeStatus,
@@ -82,6 +82,10 @@ export default function InternalView() {
   const [publishing, setPublishing] = useState(false);
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [lastPublished, setLastPublished] = useState<string | null>(null);
+  const [exportPos, setExportPos] = useState<ProcurementPo[]>([]);
+  const [exportFab, setExportFab] = useState<ProcurementFabItem[]>([]);
+  // All active POs available to link to tasks
+  const [allPos, setAllPos] = useState<ProcurementPo[]>([]);
   // Tasks with 1+ punch items linked to them get their percent_complete
   // computed automatically by a DB trigger (closed+waived / total linked
   // items) -- this map is just so the UI knows which tasks that applies to,
@@ -139,6 +143,16 @@ export default function InternalView() {
     loadTasks();
     loadLastPublished();
     loadPunchLinks();
+    // Load procurement data for PDF export
+    Promise.all([
+      supabase.schema("nixma").from("procurement_pos").select("*").eq("project_id", projectId).not("status", "in", '("cancelled")').order("created_at"),
+      supabase.schema("nixma").from("procurement_fab_items").select("*").eq("project_id", projectId).not("status", "in", '("cancelled")').order("created_at"),
+    ]).then(([posRes, fabRes]) => {
+      const pos = (posRes.data as ProcurementPo[]) || [];
+      setExportPos(pos);
+      setAllPos(pos);
+      setExportFab((fabRes.data as ProcurementFabItem[]) || []);
+    });
     supabase
       .from("projects")
       .select("name, customer, project_code")
@@ -152,6 +166,8 @@ export default function InternalView() {
       projectName: projectInfo?.name ?? projectId,
       customer: projectInfo?.customer,
       projectCode: projectInfo?.project_code,
+      pos: exportPos,
+      fabItems: exportFab,
     });
   }
 
@@ -449,6 +465,7 @@ export default function InternalView() {
               <th className="p-3 min-w-[140px]">Progress</th>
               <th className="p-3">Status</th>
               <th className="p-3 min-w-[200px]">Note</th>
+              <th className="p-3 min-w-[160px]">Linked PO</th>
               <th className="p-3 w-20">History</th>
             </tr>
           </thead>
@@ -568,6 +585,13 @@ export default function InternalView() {
                     />
                   </td>
                   <td className="p-3">
+                    <PoLinkPicker
+                      task={t}
+                      allPos={allPos}
+                      onLink={(poId) => updateTask(t.id, { linked_po_id: poId })}
+                    />
+                  </td>
+                  <td className="p-3">
                     <button
                       onClick={() => openHistory(t)}
                       className="text-xs underline text-[var(--ink)]/50 hover:text-[var(--accent)]"
@@ -650,6 +674,61 @@ function HistoryModal({
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── PO Link Picker ─────────────────────────────────────────────────────────
+// A compact inline select that lets you attach a PO to a task row.
+// Shows a coloured delivery badge when linked so you can see at a glance
+// if the PO is overdue without leaving the task table.
+
+const PO_DELIVERY_COLOR = (po: ProcurementPo): string => {
+  if (!po.expected_delivery) return "var(--ink)";
+  const days = Math.ceil((new Date(po.expected_delivery).getTime() - Date.now()) / 86400000);
+  if (days < 0) return "var(--rust)";
+  if (days <= 7) return "var(--amber)";
+  return "var(--accent)";
+};
+
+function PoLinkPicker({
+  task, allPos, onLink,
+}: {
+  task: Task;
+  allPos: ProcurementPo[];
+  onLink: (poId: number | null) => void;
+}) {
+  const linked = allPos.find(p => p.id === task.linked_po_id) ?? null;
+
+  return (
+    <div className="space-y-1">
+      <select
+        value={task.linked_po_id ?? ""}
+        onChange={e => onLink(e.target.value ? Number(e.target.value) : null)}
+        className="field px-1.5 py-1 text-xs w-full"
+      >
+        <option value="">— No PO linked —</option>
+        {allPos.map(po => (
+          <option key={po.id} value={po.id}>
+            {po.item_description.slice(0, 32)}{po.item_description.length > 32 ? "…" : ""} · {po.supplier_name.slice(0, 20)}
+          </option>
+        ))}
+      </select>
+      {linked && (
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: PO_DELIVERY_COLOR(linked) }}
+          />
+          <span className="text-[10px] font-mono-num"
+            style={{ color: PO_DELIVERY_COLOR(linked) }}>
+            {linked.status.toUpperCase()}
+            {linked.expected_delivery
+              ? ` · ${new Date(linked.expected_delivery).toLocaleDateString("en-MY")}`
+              : ""}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

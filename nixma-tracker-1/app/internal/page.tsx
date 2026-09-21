@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { Task } from "@/lib/types";
-import { useProjectId } from "@/lib/useProjectId";
+import { Task, ProcurementPo, ProcurementFabItem, PoStatus } from "@/lib/types";
+import { useProjectId, withProject } from "@/lib/useProjectId";
 import UpdateAnalyzer from "./UpdateAnalyzer";
 import {
   computeStatus,
@@ -42,6 +43,10 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Procurement state
+  const [openPos, setOpenPos] = useState<ProcurementPo[]>([]);
+  const [overdueFab, setOverdueFab] = useState<ProcurementFabItem[]>([]);
+
   const [riskDigest, setRiskDigest] = useState<RiskDigestItem[] | null>(null);
   const [riskDigestGeneratedAt, setRiskDigestGeneratedAt] = useState<string | null>(null);
   const [riskDigestUsage, setRiskDigestUsage] = useState<RiskDigestUsage | null>(null);
@@ -60,9 +65,29 @@ export default function Dashboard() {
     setLoading(false);
   }, [projectId]);
 
+  const loadProcurement = useCallback(async () => {
+    const today = new Date().toISOString().split("T")[0];
+    const [posRes, fabRes] = await Promise.all([
+      supabase.schema("nixma").from("procurement_pos")
+        .select("*")
+        .eq("project_id", projectId)
+        .not("status", "in", '("received","closed","cancelled")')
+        .order("expected_delivery"),
+      supabase.schema("nixma").from("procurement_fab_items")
+        .select("*")
+        .eq("project_id", projectId)
+        .not("status", "in", '("delivered","cancelled")')
+        .lt("expected_completion", today)
+        .order("expected_completion"),
+    ]);
+    setOpenPos((posRes.data as ProcurementPo[]) || []);
+    setOverdueFab((fabRes.data as ProcurementFabItem[]) || []);
+  }, [projectId]);
+
   useEffect(() => {
     loadTasks();
-  }, [loadTasks]);
+    loadProcurement();
+  }, [loadTasks, loadProcurement]);
 
   // Loads whatever was cached by a previous "Refresh" click (by anyone on
   // the project, not just you) -- never calls Claude on its own. Phase 1 of
@@ -380,6 +405,9 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Procurement snapshot */}
+      <ProcurementWidget openPos={openPos} overdueFab={overdueFab} projectId={projectId} />
+
       {/* Risk digest -- AI layer, phase 1. Manually triggered, internal only. */}
       <div className="panel p-5 mt-6">
         <div className="flex items-center justify-between gap-3 mb-1">
@@ -466,5 +494,98 @@ export default function Dashboard() {
         )}
       </div>
     </main>
+  );
+}
+
+// ─── Procurement snapshot widget ──────────────────────────────────────
+
+const PO_STATUS_COLOR: Record<PoStatus, string> = {
+  draft: "var(--muted)", issued: "#4a90d9", partial: "var(--amber)",
+  received: "var(--accent)", closed: "var(--muted)", cancelled: "var(--rust)",
+};
+void PO_STATUS_COLOR; // used implicitly via PoStatus import
+
+function daysUntil(d: string | null) {
+  if (!d) return null;
+  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+}
+
+function ProcurementWidget({
+  openPos, overdueFab, projectId,
+}: {
+  openPos: ProcurementPo[];
+  overdueFab: ProcurementFabItem[];
+  projectId: string;
+}) {
+  const overdue = openPos.filter(p => p.expected_delivery && daysUntil(p.expected_delivery)! < 0);
+  const dueSoon = openPos.filter(p => p.expected_delivery && daysUntil(p.expected_delivery)! >= 0 && daysUntil(p.expected_delivery)! <= 7);
+
+  return (
+    <div className="panel p-5 mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium">Procurement snapshot</h2>
+        <Link href={withProject("/internal/procurement", projectId)}
+          className="text-xs text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
+          View all →
+        </Link>
+      </div>
+      <div className="flex gap-3 flex-wrap mb-4">
+        {[
+          { label: "Open POs", value: openPos.length, color: "var(--accent)" },
+          { label: "Overdue delivery", value: overdue.length, color: overdue.length > 0 ? "var(--rust)" : "var(--muted)" },
+          { label: "Due this week", value: dueSoon.length, color: dueSoon.length > 0 ? "var(--amber)" : "var(--muted)" },
+          { label: "Overdue fab", value: overdueFab.length, color: overdueFab.length > 0 ? "var(--rust)" : "var(--muted)" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="flex-1 min-w-[100px] bg-[var(--line)]/30 rounded-lg p-3">
+            <p className="text-xl font-semibold font-mono-num" style={{ color }}>{value}</p>
+            <p className="text-xs text-[var(--ink)]/50 mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+      {overdue.length === 0 && dueSoon.length === 0 && overdueFab.length === 0 ? (
+        <p className="text-sm text-[var(--ink)]/50">
+          {openPos.length === 0 ? "No open purchase orders." : "All deliveries on track."}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {overdue.map(po => (
+            <div key={po.id} className="flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{po.item_description}</p>
+                <p className="text-xs text-[var(--ink)]/50">{po.supplier_name}</p>
+              </div>
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0"
+                style={{ backgroundColor: "#a13d2f1a", color: "var(--rust)" }}>
+                {Math.abs(daysUntil(po.expected_delivery)!)}d overdue
+              </span>
+            </div>
+          ))}
+          {dueSoon.map(po => (
+            <div key={po.id} className="flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{po.item_description}</p>
+                <p className="text-xs text-[var(--ink)]/50">{po.supplier_name}</p>
+              </div>
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0"
+                style={{ backgroundColor: "#b7791f1a", color: "var(--amber)" }}>
+                {daysUntil(po.expected_delivery)}d left
+              </span>
+            </div>
+          ))}
+          {overdueFab.map(f => (
+            <div key={f.id} className="flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{f.item_name}</p>
+                <p className="text-xs text-[var(--ink)]/50">{f.fab_vendor || "Fab item"}</p>
+              </div>
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0"
+                style={{ backgroundColor: "#a13d2f1a", color: "var(--rust)" }}>
+                Fab overdue
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -44,6 +44,7 @@ export interface Task {
   // value.
   modules: string[] | null;
   stations: string[] | null;
+  linked_po_id: number | null; // linked purchase order — delivery delay flags this task
 }
 
 export type NoteAudience = "internal" | "client";

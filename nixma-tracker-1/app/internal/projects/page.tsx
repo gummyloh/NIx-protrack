@@ -132,7 +132,17 @@ export default function ProjectsPage() {
     setShowForm(false);
     setNewProjectPin(row);
     await loadProjects();
-    if (row) checkTemplateFit(row.project_id);
+    if (row) {
+      await supabase.schema("nixma").from("procurement_budget").insert([
+        { project_id: row.project_id, category: "Mechanical",  budgeted_amount: 0, currency: "MYR" },
+        { project_id: row.project_id, category: "Electrical",  budgeted_amount: 0, currency: "MYR" },
+        { project_id: row.project_id, category: "Fabrication", budgeted_amount: 0, currency: "MYR" },
+        { project_id: row.project_id, category: "Software",    budgeted_amount: 0, currency: "MYR" },
+        { project_id: row.project_id, category: "Labour",      budgeted_amount: 0, currency: "MYR" },
+        { project_id: row.project_id, category: "Misc",        budgeted_amount: 0, currency: "MYR" },
+      ]);
+      checkTemplateFit(row.project_id);
+    }
   }
 
   // Runs once, automatically, right after a new project is created --
