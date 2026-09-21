@@ -155,6 +155,150 @@ export interface ProgressNode {
   created_at: string;
 }
 
+// ============================================================
+// PROCUREMENT MODULE TYPES
+// ============================================================
+
+export type PoStatus = 'draft' | 'issued' | 'partial' | 'received' | 'closed' | 'cancelled';
+export type FabStatus = 'not_started' | 'in_fabrication' | 'qc' | 'ready' | 'delivered' | 'cancelled';
+export type RfqStatus = 'open' | 'awarded' | 'cancelled';
+
+export interface ProcurementSupplier {
+  id: number;
+  project_id: string;
+  name: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  category: string | null;
+  total_orders: number;
+  on_time_count: number;
+  late_count: number;
+  avg_delay_days: number | null;
+  quality_rejection_count: number;
+  last_order_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ProcurementRfq {
+  id: number;
+  project_id: string;
+  item_description: string;
+  category: string | null;
+  quantity: number | null;
+  unit: string | null;
+  status: RfqStatus;
+  selected_quote_id: number | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ProcurementQuote {
+  id: number;
+  rfq_id: number;
+  project_id: string;
+  supplier_id: number | null;
+  supplier_name: string;
+  unit_price: number | null;
+  quantity: number | null;
+  total_price: number | null;
+  currency: string;
+  lead_time_days: number | null;
+  payment_terms: string | null;
+  validity_date: string | null;
+  delivery_terms: string | null;
+  source_doc_url: string | null;
+  extracted_by_ai: boolean;
+  raw_ai_json: Record<string, unknown> | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ProcurementPo {
+  id: number;
+  project_id: string;
+  po_number: string | null;
+  supplier_id: number | null;
+  supplier_name: string;
+  rfq_id: number | null;
+  quote_id: number | null;
+  category: string | null;
+  item_description: string;
+  quantity: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  total_price: number | null;
+  currency: string;
+  payment_terms: string | null;
+  date_ordered: string | null;
+  expected_delivery: string | null;
+  actual_delivery: string | null;
+  status: PoStatus;
+  source_doc_url: string | null;
+  extracted_by_ai: boolean;
+  raw_ai_json: Record<string, unknown> | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcurementFabItem {
+  id: number;
+  project_id: string;
+  item_name: string;
+  drawing_ref: string | null;
+  fab_vendor: string | null;
+  category: string | null;
+  quantity: number | null;
+  cost: number | null;
+  currency: string;
+  start_date: string | null;
+  expected_completion: string | null;
+  actual_completion: string | null;
+  status: FabStatus;
+  source_doc_url: string | null;
+  extracted_by_ai: boolean;
+  raw_ai_json: Record<string, unknown> | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcurementBudget {
+  id: number;
+  project_id: string;
+  category: string;
+  budgeted_amount: number;
+  currency: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AiScanResult {
+  document_type: 'quotation' | 'purchase_order' | 'delivery_order' | 'invoice' | 'fabrication_order' | 'receipt' | 'unknown';
+  supplier_name: string | null;
+  item_description: string | null;
+  category: string | null;
+  quantity: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  total_price: number | null;
+  currency: string | null;
+  lead_time_days: number | null;
+  payment_terms: string | null;
+  validity_date: string | null;
+  delivery_terms: string | null;
+  po_number: string | null;
+  date_ordered: string | null;
+  expected_delivery: string | null;
+  drawing_ref: string | null;
+  expected_completion: string | null;
+  cost: number | null;
+  confidence: 'high' | 'medium' | 'low';
+  notes: string | null;
+}
+
 export const DEPARTMENTS = [
   "Project Management",
   "Mechanical",

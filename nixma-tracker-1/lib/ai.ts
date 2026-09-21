@@ -13,6 +13,10 @@
 export const AI_MODELS = {
   haiku: "claude-haiku-4-5-20251001",
   sonnet: "claude-sonnet-5",
+  // Used for procurement document extraction and quote comparison --
+  // accurate enough for structured data extraction, cheap enough to call
+  // on every scan without worrying about API cost.
+  sonnet46: "claude-sonnet-4-6",
 } as const;
 
 // $ per model, per million tokens (input, output) -- used only to show a
@@ -22,6 +26,7 @@ export const AI_MODELS = {
 const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
   [AI_MODELS.haiku]: { input: 1, output: 5 },
   [AI_MODELS.sonnet]: { input: 2, output: 10 },
+  [AI_MODELS.sonnet46]: { input: 3, output: 15 },
 };
 
 export interface ClaudeResult {
