@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useProjectId } from "@/lib/useProjectId";
 import { supabase } from "@/lib/supabase";
 import {
@@ -785,6 +785,140 @@ function AttentionBanner({ pos, fab }: { pos: ProcurementPo[]; fab: ProcurementF
   );
 }
 
+// ─── Delivery Photo Upload ────────────────────────────────────────────────────
+
+interface PoPhoto {
+  id: number;
+  po_id: number;
+  storage_path: string;
+  caption: string | null;
+  uploaded_at: string;
+  url?: string;
+}
+
+function DeliveryPhotos({ po, projectId }: { po: ProcurementPo; projectId: string }) {
+  const [photos, setPhotos] = useState<PoPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [caption, setCaption] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const loadPhotos = useCallback(async () => {
+    const { data } = await supabase.schema("nixma").from("procurement_po_photos")
+      .select("*").eq("po_id", po.id).order("uploaded_at", { ascending: false });
+    if (!data?.length) { setPhotos([]); return; }
+    // Get signed URLs
+    const withUrls = await Promise.all((data as PoPhoto[]).map(async (p) => {
+      const { data: url } = await supabase.storage
+        .from("delivery-photos")
+        .createSignedUrl(p.storage_path, 3600);
+      return { ...p, url: url?.signedUrl };
+    }));
+    setPhotos(withUrls);
+  }, [po.id]);
+
+  useEffect(() => { if (expanded) loadPhotos(); }, [expanded, loadPhotos]);
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setUploading(false); return; }
+
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${projectId}/${po.id}/${Date.now()}.${ext}`;
+
+    const { error: upErr } = await supabase.storage
+      .from("delivery-photos")
+      .upload(path, file, { contentType: file.type, upsert: false });
+
+    if (!upErr) {
+      await supabase.schema("nixma").from("procurement_po_photos").insert({
+        po_id: po.id,
+        project_id: projectId,
+        storage_path: path,
+        caption: caption.trim() || null,
+        uploaded_by: session.user.id,
+      });
+      setCaption("");
+      loadPhotos();
+    }
+    setUploading(false);
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t border-[var(--border)]">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="flex items-center gap-1.5 text-xs text-[var(--ink)]/50 hover:text-[var(--ink)] transition-colors"
+      >
+        <span>{expanded ? "▾" : "▸"}</span>
+        <span>📷 Delivery photos{photos.length > 0 ? ` (${photos.length})` : ""}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          {/* Upload row */}
+          <div className="flex gap-2 flex-wrap items-center">
+            <input
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              placeholder="Caption (optional)"
+              className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] text-xs text-[var(--ink)] focus:outline-none"
+            />
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              disabled={uploading}
+              className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+            >
+              {uploading ? "Uploading…" : "📷 Add photo"}
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handlePhotoUpload}
+            />
+          </div>
+          {/* Photo grid */}
+          {photos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {photos.map(p => (
+                <div key={p.id} className="relative group">
+                  {p.url ? (
+                    <a href={p.url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={p.url}
+                        alt={p.caption || "Delivery photo"}
+                        className="w-full h-24 object-cover rounded-lg border border-[var(--border)] hover:opacity-90 transition-opacity"
+                      />
+                    </a>
+                  ) : (
+                    <div className="w-full h-24 rounded-lg bg-[var(--border)] flex items-center justify-center text-xs text-[var(--ink)]/30">Loading…</div>
+                  )}
+                  {p.caption && (
+                    <p className="text-[10px] text-[var(--ink)]/50 mt-1 truncate">{p.caption}</p>
+                  )}
+                  <p className="text-[10px] text-[var(--ink)]/30">
+                    {new Date(p.uploaded_at).toLocaleDateString("en-MY")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+          {photos.length === 0 && !uploading && (
+            <p className="text-xs text-[var(--ink)]/40">No photos yet. Take a photo when goods arrive.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── main page ─────────────────────────────────────────────────────────────────
 
 type Tab = "pos" | "fab" | "rfq" | "budget";
@@ -1053,6 +1187,7 @@ export default function ProcurementPage() {
                       Edit
                     </button>
                   </div>
+                  <DeliveryPhotos po={po} projectId={projectId} />
                 </div>
               ))}
             </div>
