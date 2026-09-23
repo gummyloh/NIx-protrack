@@ -582,11 +582,17 @@ export default function GanttView() {
         const scrollHandler = () => {
           const gantt = ganttRef.current;
           if (!gantt || !gantt.gantt_start || !gantt.config) return;
-          const date = addUnits(
-            gantt.gantt_start,
-            (scrollEl.scrollLeft / gantt.config.column_width) * gantt.config.step,
-            gantt.config.unit
-          );
+
+          // Use the center of the visible viewport to find the correct date.
+          const centerX = scrollEl.scrollLeft + scrollEl.clientWidth / 2;
+          const colW = gantt.config.column_width;
+          const step = gantt.config.step;
+          const unit = gantt.config.unit;
+
+          // Number of steps (days/weeks/months) from gantt start to center.
+          const stepsFromStart = (centerX / colW) * step;
+          const date = addUnits(gantt.gantt_start, stepsFromStart, unit);
+
           const mode = viewModeRef.current;
           const label =
             mode === "Month"
