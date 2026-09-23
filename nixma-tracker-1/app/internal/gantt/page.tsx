@@ -258,6 +258,11 @@ export default function GanttView() {
   // Month.
   const viewModeRef = useRef<string>(ZOOM_LEVELS[0]);
   const zoomLockRef = useRef(false);
+  // Scroll date indicator – label shown while the user drags the scrollbar,
+  // clears ~1.5 s after scrolling stops.
+  const [scrollLabel, setScrollLabel] = useState<string | null>(null);
+  const scrollLabelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollHandlerRef = useRef<(() => void) | null>(null);
   const { staleNotice, dismissStaleNotice, markLocalWrite } = useTaskRealtime(projectId);
 
   function getScrollEl(): HTMLElement | null {
@@ -572,6 +577,27 @@ export default function GanttView() {
       if (scrollEl) {
         attachChartPanning(scrollEl, panRef);
         attachWheelZoom(scrollEl, ganttRef, viewModeRef, zoomLockRef);
+
+        // Show a floating pill with the current visible date while scrolling.
+        const scrollHandler = () => {
+          const gantt = ganttRef.current;
+          if (!gantt || !gantt.gantt_start || !gantt.config) return;
+          const date = addUnits(
+            gantt.gantt_start,
+            (scrollEl.scrollLeft / gantt.config.column_width) * gantt.config.step,
+            gantt.config.unit
+          );
+          const mode = viewModeRef.current;
+          const label =
+            mode === "Month"
+              ? date.toLocaleDateString("en-MY", { month: "long", year: "numeric" })
+              : date.toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
+          setScrollLabel(label);
+          if (scrollLabelTimerRef.current) clearTimeout(scrollLabelTimerRef.current);
+          scrollLabelTimerRef.current = setTimeout(() => setScrollLabel(null), 1500);
+        };
+        scrollHandlerRef.current = scrollHandler;
+        scrollEl.addEventListener("scroll", scrollHandler, { passive: true });
       }
 
       // Center the vertical "today" line in the viewport, instead of
@@ -611,6 +637,12 @@ export default function GanttView() {
 
     return () => {
       cancelled = true;
+      // Clean up the scroll-date handler so it doesn't fire after a rebuild.
+      const el = getScrollEl();
+      if (el && scrollHandlerRef.current) {
+        el.removeEventListener("scroll", scrollHandlerRef.current);
+        scrollHandlerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ganttSignature, loading]);
@@ -712,8 +744,19 @@ export default function GanttView() {
       {loading ? (
         <p className="text-sm text-[var(--ink)]/50">Loading…</p>
       ) : (
-        <div className="panel overflow-x-auto">
-          <div ref={containerRef} />
+        <div className="relative">
+          <div className="panel overflow-x-auto">
+            <div ref={containerRef} />
+          </div>
+          {scrollLabel && (
+            <div
+              className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-50
+                         bg-gray-900/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full
+                         shadow-lg backdrop-blur-sm"
+            >
+              📅 {scrollLabel}
+            </div>
+          )}
         </div>
       )}
 
