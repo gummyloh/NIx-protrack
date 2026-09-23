@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { UserRole, ROLE_LABELS } from "@/lib/internalAuth";
 import { useProjectId, withProject } from "@/lib/useProjectId";
 import { ProjectRow } from "@/lib/types";
 import ProjectMembersPanel from "./ProjectMembersPanel";
@@ -13,6 +14,7 @@ interface Profile {
   full_name: string | null;
   approved: boolean;
   is_admin: boolean;
+  role: UserRole;
   created_at: string;
 }
 
@@ -59,7 +61,7 @@ export default function TeamAdmin() {
     } else {
       const rows = (data as Profile[]) || [];
       setProfiles(rows);
-      setIsAdmin(rows.some((p) => p.id === session.user.id && p.is_admin));
+      setIsAdmin(rows.some((p) => p.id === session.user.id && p.role === "admin"));
     }
     setLoading(false);
   }
@@ -321,7 +323,7 @@ export default function TeamAdmin() {
               <div className="min-w-0">
                 <p className="font-medium truncate">
                   {p.full_name || "—"}
-                  {p.is_admin && (
+                  {p.role === "admin" && (
                     <span className="ml-2 text-[10px] font-mono uppercase tracking-wide text-[var(--accent)] border border-[var(--accent)]/40 rounded px-1.5 py-0.5">
                       Admin
                     </span>
@@ -329,29 +331,42 @@ export default function TeamAdmin() {
                 </p>
                 <p className="text-xs text-[var(--ink)]/50 truncate">{p.email}</p>
               </div>
-              {p.id !== me && (
-                <div className="flex gap-3 shrink-0 text-xs">
-                  <button
-                    onClick={() => patch(p.id, { is_admin: !p.is_admin })}
-                    className="underline text-[var(--ink)]/60 hover:text-[var(--accent)]"
-                  >
-                    {p.is_admin ? "Remove admin" : "Make admin"}
-                  </button>
-                  <button
-                    onClick={() => patch(p.id, { approved: false })}
-                    className="underline text-[var(--rust)]/70 hover:text-[var(--rust)]"
-                  >
-                    Revoke access
-                  </button>
-                  <button
-                    onClick={() => deleteUser(p)}
-                    disabled={deletingId === p.id}
-                    className="underline text-[var(--rust)]/70 hover:text-[var(--rust)] disabled:opacity-50"
-                  >
-                    {deletingId === p.id ? "Deleting…" : "Delete"}
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-3 shrink-0">
+                {p.id !== me ? (
+                  <>
+                    {/* Role selector */}
+                    <select
+                      value={p.role}
+                      onChange={(e) => patch(p.id, {
+                        role: e.target.value as UserRole,
+                        is_admin: e.target.value === "admin",
+                      })}
+                      className="text-xs border border-[var(--line)] rounded px-2 py-1 bg-[var(--surface)] text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                    >
+                      {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
+                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                      ))}
+                    </select>
+                    <div className="flex gap-3 text-xs">
+                      <button
+                        onClick={() => patch(p.id, { approved: false })}
+                        className="underline text-[var(--rust)]/70 hover:text-[var(--rust)]"
+                      >
+                        Revoke
+                      </button>
+                      <button
+                        onClick={() => deleteUser(p)}
+                        disabled={deletingId === p.id}
+                        className="underline text-[var(--rust)]/70 hover:text-[var(--rust)] disabled:opacity-50"
+                      >
+                        {deletingId === p.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-[var(--ink)]/40">{ROLE_LABELS[p.role]} (you)</span>
+                )}
+              </div>
             </div>
           ))}
         </div>

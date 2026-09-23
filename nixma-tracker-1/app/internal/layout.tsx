@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { InternalAuthProvider } from "@/lib/internalAuth";
+import { InternalAuthProvider, roleToPerms, UserRole } from "@/lib/internalAuth";
 import InternalNav from "./InternalNav";
 
 interface Profile {
@@ -12,6 +12,7 @@ interface Profile {
   full_name: string | null;
   approved: boolean;
   is_admin: boolean;
+  role: UserRole;
 }
 
 /**
@@ -150,7 +151,7 @@ export default function InternalLayout({
   if (projectState === "checking" || projectState === "denied") {
     return (
       <>
-        <InternalNav isAdmin={profile?.is_admin ?? false} userEmail={profile?.email ?? null} />
+        <InternalNav role={profile?.role ?? "member"} userEmail={profile?.email ?? null} />
         <main className="md:pl-60 min-h-screen flex items-center justify-center">
           <p className="text-sm text-[var(--ink)]/50">
             {projectState === "denied" ? "Redirecting…" : "Checking project access…"}
@@ -163,7 +164,7 @@ export default function InternalLayout({
   return (
     <InternalAuthProvider value={{ isAdmin: profile?.is_admin ?? false }}>
       <Suspense fallback={null}>
-        <InternalNav isAdmin={profile?.is_admin ?? false} userEmail={profile?.email ?? null} />
+        <InternalNav role={profile?.role ?? "member"} userEmail={profile?.email ?? null} />
         <div className="md:pl-60">{children}</div>
       </Suspense>
     </InternalAuthProvider>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useProjectId } from "@/lib/useProjectId";
+import { useInternalAuth } from "@/lib/internalAuth";
 import { supabase } from "@/lib/supabase";
 import {
   ProcurementPo,
@@ -125,6 +126,14 @@ function PoModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+
+  if (!canViewProcurement) {
+    return (
+      <main className="p-8 text-center">
+        <p className="text-sm text-[var(--ink)]/50">You don’t have access to Procurement.</p>
+      </main>
+    );
+  }
   const [form, setForm] = useState<PoFormData>(
     initial
       ? {
@@ -340,6 +349,14 @@ function FabModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+
+  if (!canViewProcurement) {
+    return (
+      <main className="p-8 text-center">
+        <p className="text-sm text-[var(--ink)]/50">You don’t have access to Procurement.</p>
+      </main>
+    );
+  }
   const [form, setForm] = useState<FabFormData>(
     initial
       ? {
@@ -478,6 +495,14 @@ function RfqModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+
+  if (!canViewProcurement) {
+    return (
+      <main className="p-8 text-center">
+        <p className="text-sm text-[var(--ink)]/50">You don’t have access to Procurement.</p>
+      </main>
+    );
+  }
   const [itemDescription, setItemDescription] = useState(initial?.item_description || "");
   const [category, setCategory] = useState(initial?.category || "");
   const [quantity, setQuantity] = useState(initial?.quantity != null ? String(initial.quantity) : "");
@@ -567,6 +592,14 @@ function QuoteModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+
+  if (!canViewProcurement) {
+    return (
+      <main className="p-8 text-center">
+        <p className="text-sm text-[var(--ink)]/50">You don’t have access to Procurement.</p>
+      </main>
+    );
+  }
   const [supplierName, setSupplierName] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [quantity, setQuantity] = useState(rfq.quantity != null ? String(rfq.quantity) : "");
@@ -687,6 +720,14 @@ function BudgetModal({ existing, onClose, onSave }: {
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+
+  if (!canViewProcurement) {
+    return (
+      <main className="p-8 text-center">
+        <p className="text-sm text-[var(--ink)]/50">You don’t have access to Procurement.</p>
+      </main>
+    );
+  }
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("MYR");
@@ -924,7 +965,16 @@ function DeliveryPhotos({ po, projectId }: { po: ProcurementPo; projectId: strin
 type Tab = "pos" | "fab" | "rfq" | "budget";
 
 export default function ProcurementPage() {
+  const { canViewProcurement } = useInternalAuth();
   const projectId = useProjectId();
+
+  if (!canViewProcurement) {
+    return (
+      <main className="p-8 text-center">
+        <p className="text-sm text-[var(--ink)]/50">You don’t have access to Procurement.</p>
+      </main>
+    );
+  }
   const [tab, setTab] = useState<Tab>("pos");
   const [pos, setPos] = useState<ProcurementPo[]>([]);
   const [fab, setFab] = useState<ProcurementFabItem[]>([]);

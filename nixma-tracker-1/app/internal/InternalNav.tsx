@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { UserRole, ROLE_LABELS, roleToPerms } from "@/lib/internalAuth";
 import { useProjectId, withProject } from "@/lib/useProjectId";
 import {
   IconFolder,
@@ -37,6 +38,16 @@ function IconBell({ className }: { className?: string }) {
   );
 }
 
+
+// Clipboard check icon for FAT/Acceptance
+function IconClipboardCheck({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" />
+    </svg>
+  );
+}
+
 interface ProjectRow {
   name: string;
   customer: string;
@@ -66,12 +77,13 @@ interface NavGroup {
  * sense until a project has been chosen.
  */
 export default function InternalNav({
-  isAdmin,
+  role = "member",
   userEmail,
 }: {
-  isAdmin: boolean;
+  role?: UserRole;
   userEmail?: string | null;
 }) {
+  const { isAdmin, canViewFinance, canViewProcurement } = roleToPerms(role);
   const router = useRouter();
   const pathname = usePathname();
   const projectId = useProjectId();
@@ -130,11 +142,17 @@ export default function InternalNav({
             { label: "Progress", path: "/internal/progress", icon: IconTrendUp },
           ],
         },
-        {
+        ...(canViewProcurement || canViewFinance ? [{
           label: "Finance",
           links: [
-            { label: "Procurement", path: "/internal/procurement", icon: IconShoppingCart },
-            { label: "Margin",      path: "/internal/margin",      icon: IconTrendUp },
+            ...(canViewProcurement ? [{ label: "Procurement", path: "/internal/procurement", icon: IconShoppingCart }] : []),
+            ...(canViewFinance    ? [{ label: "Margin",      path: "/internal/margin",      icon: IconTrendUp }]      : []),
+          ],
+        }] : []),
+        {
+          label: "Acceptance",
+          links: [
+            { label: "FAT / Sign-off", path: "/internal/fat", icon: IconClipboardCheck },
           ],
         },
         {
@@ -230,7 +248,7 @@ export default function InternalNav({
               </span>
               <div className="min-w-0">
                 <p className="text-xs text-[var(--sidebar-ink)] truncate">{userEmail}</p>
-                <p className="text-[10px] text-[var(--sidebar-muted)]">{isAdmin ? "Admin" : "Member"}</p>
+                <p className="text-[10px] text-[var(--sidebar-muted)]">{ROLE_LABELS[role]}</p>
               </div>
             </div>
           )}

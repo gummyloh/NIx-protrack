@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useProjectId } from "@/lib/useProjectId";
+import { useInternalAuth } from "@/lib/internalAuth";
 import { supabase } from "@/lib/supabase";
 import { ProcurementPo, ProcurementFabItem, ProcurementBudget } from "@/lib/types";
 
@@ -29,7 +30,16 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 export default function MarginPage() {
+  const { canViewFinance } = useInternalAuth();
   const projectId = useProjectId();
+
+  if (!canViewFinance) {
+    return (
+      <main className="p-8 text-center">
+        <p className="text-sm text-[var(--ink)]/50">You don’t have access to Finance.</p>
+      </main>
+    );
+  }
 
   const [quotedPrice, setQuotedPrice] = useState<number | null>(null);
   const [quotedCurrency, setQuotedCurrency] = useState("MYR");
