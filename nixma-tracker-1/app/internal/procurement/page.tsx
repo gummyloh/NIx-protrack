@@ -127,6 +127,7 @@ function PoModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+  const { canViewProcurement } = useInternalAuth();
 
   if (!canViewProcurement) {
     return (
@@ -359,6 +360,7 @@ function FabModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+  const { canViewProcurement } = useInternalAuth();
 
   if (!canViewProcurement) {
     return (
@@ -598,6 +600,7 @@ function RfqModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+  const { canViewProcurement } = useInternalAuth();
 
   if (!canViewProcurement) {
     return (
@@ -695,6 +698,7 @@ function QuoteModal({
   onSave: () => void;
 }) {
   const projectId = useProjectId();
+  const { canViewProcurement } = useInternalAuth();
 
   if (!canViewProcurement) {
     return (
@@ -822,6 +826,7 @@ function BudgetModal({ existing, onClose, onSave }: {
   onClose: () => void;
   onSave: () => void;
 }) {
+  const { canViewProcurement } = useInternalAuth();
   const projectId = useProjectId();
 
   if (!canViewProcurement) {
