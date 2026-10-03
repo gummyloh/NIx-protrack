@@ -162,7 +162,7 @@ export default function InternalLayout({
   }
 
   return (
-    <InternalAuthProvider value={{ isAdmin: profile?.is_admin ?? false }}>
+    <InternalAuthProvider value={roleToPerms(profile?.role ?? "member")}>
       <Suspense fallback={null}>
         <InternalNav role={profile?.role ?? "member"} userEmail={profile?.email ?? null} />
         <div className="md:pl-60">{children}</div>
