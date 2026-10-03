@@ -13,6 +13,7 @@ import {
   AiScanResult,
   PoStatus,
   FabStatus,
+  FabRequirementsChecklist,
 } from "@/lib/types";
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -333,12 +334,21 @@ type FabFormData = {
   item_name: string; drawing_ref: string; fab_vendor: string;
   category: string; quantity: string; cost: string; currency: string;
   start_date: string; expected_completion: string; status: FabStatus; notes: string;
+  // supplier readiness
+  req_drawing_sent: boolean; req_spec_sent: boolean; req_po_confirmed: boolean; req_other: string;
+  supplier_confirmed: boolean; supplier_confirmed_date: string;
+  supplier_confirmed_start: string; supplier_confirmed_delivery: string;
+  last_supplier_update: string; supplier_confirmed_by: string;
 };
 
 const EMPTY_FAB: FabFormData = {
   item_name: "", drawing_ref: "", fab_vendor: "", category: "",
   quantity: "", cost: "", currency: "MYR",
   start_date: "", expected_completion: "", status: "not_started", notes: "",
+  req_drawing_sent: false, req_spec_sent: false, req_po_confirmed: false, req_other: "",
+  supplier_confirmed: false, supplier_confirmed_date: "",
+  supplier_confirmed_start: "", supplier_confirmed_delivery: "",
+  last_supplier_update: "", supplier_confirmed_by: "",
 };
 
 function FabModal({
@@ -371,6 +381,16 @@ function FabModal({
           expected_completion: initial.expected_completion || "",
           status: initial.status,
           notes: initial.notes || "",
+          req_drawing_sent: initial.requirements_checklist?.drawing_sent ?? false,
+          req_spec_sent: initial.requirements_checklist?.spec_sent ?? false,
+          req_po_confirmed: initial.requirements_checklist?.po_confirmed ?? false,
+          req_other: initial.requirements_checklist?.other || "",
+          supplier_confirmed: initial.supplier_confirmed ?? false,
+          supplier_confirmed_date: initial.supplier_confirmed_date || "",
+          supplier_confirmed_start: initial.supplier_confirmed_start || "",
+          supplier_confirmed_delivery: initial.supplier_confirmed_delivery || "",
+          last_supplier_update: initial.last_supplier_update || "",
+          supplier_confirmed_by: initial.supplier_confirmed_by || "",
         }
       : EMPTY_FAB
   );
@@ -381,9 +401,20 @@ function FabModal({
 
   async function save() {
     if (!form.item_name.trim()) { setError("Item name is required."); return; }
+    if (form.status === "in_fabrication" && !form.supplier_confirmed) {
+      setError("Cannot mark as In Fabrication until supplier has confirmed receipt of all requirements. Tick \"Supplier Confirmed\" in the Supplier Readiness section below.");
+      return;
+    }
     setSaving(true); setError(null);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setError("Not signed in."); setSaving(false); return; }
+
+    const checklist: FabRequirementsChecklist = {
+      drawing_sent: form.req_drawing_sent,
+      spec_sent: form.req_spec_sent,
+      po_confirmed: form.req_po_confirmed,
+      other: form.req_other || null,
+    };
 
     const payload = {
       project_id: projectId,
@@ -398,6 +429,13 @@ function FabModal({
       expected_completion: form.expected_completion || null,
       status: form.status,
       notes: form.notes || null,
+      requirements_checklist: checklist,
+      supplier_confirmed: form.supplier_confirmed,
+      supplier_confirmed_date: form.supplier_confirmed_date || null,
+      supplier_confirmed_start: form.supplier_confirmed_start || null,
+      supplier_confirmed_delivery: form.supplier_confirmed_delivery || null,
+      last_supplier_update: form.last_supplier_update || null,
+      supplier_confirmed_by: form.supplier_confirmed_by || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -471,6 +509,71 @@ function FabModal({
             <div className="col-span-2">
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Any remarks…" />
+            </div>
+          </div>
+
+          {/* ── Supplier Readiness ── */}
+          <div className="border border-orange-500/20 rounded-xl p-4 space-y-3 bg-orange-500/5">
+            <p className="text-xs font-semibold text-orange-400 uppercase tracking-wide">⚠ Supplier Readiness</p>
+            <p className="text-[11px] text-[var(--ink)]/50">Track what has been sent to the supplier. A fab item cannot be moved to “In Fabrication” without supplier confirmation.</p>
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[var(--ink)]/60">Requirements sent to supplier:</p>
+              {([
+                ["req_drawing_sent", "3D / Technical Drawing sent"],
+                ["req_spec_sent",    "Technical Specifications / BOM sent"],
+                ["req_po_confirmed", "PO number confirmed"],
+              ] as [keyof FabFormData, string][]).map(([key, label]) => (
+                <label key={String(key)} className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form[key] as boolean}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span className="text-sm text-[var(--ink)]/80">{label}</span>
+                </label>
+              ))}
+              <div>
+                <Label>Other requirement</Label>
+                <Input value={form.req_other} onChange={e => set("req_other", e.target.value)} placeholder="e.g. Material cert, sample approval…" />
+              </div>
+            </div>
+            <div className="pt-3 border-t border-orange-500/20 space-y-3">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.supplier_confirmed}
+                  onChange={e => setForm(f => ({ ...f, supplier_confirmed: e.target.checked }))}
+                  className="w-4 h-4 rounded"
+                />
+                <span className={`text-sm font-semibold ${form.supplier_confirmed ? "text-emerald-400" : "text-[var(--ink)]/80"}`}>
+                  ✓ Supplier confirmed — has all requirements, committed to dates
+                </span>
+              </label>
+              {form.supplier_confirmed && (
+                <div className="grid grid-cols-2 gap-3 pl-6">
+                  <div className="col-span-2">
+                    <Label>Confirmed by (supplier contact)</Label>
+                    <Input value={form.supplier_confirmed_by} onChange={e => set("supplier_confirmed_by", e.target.value)} placeholder="Name / WhatsApp / email" />
+                  </div>
+                  <div>
+                    <Label>Date confirmed</Label>
+                    <Input type="date" value={form.supplier_confirmed_date} onChange={e => set("supplier_confirmed_date", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Supplier committed start</Label>
+                    <Input type="date" value={form.supplier_confirmed_start} onChange={e => set("supplier_confirmed_start", e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Supplier committed delivery date</Label>
+                    <Input type="date" value={form.supplier_confirmed_delivery} onChange={e => set("supplier_confirmed_delivery", e.target.value)} />
+                  </div>
+                </div>
+              )}
+              <div>
+                <Label>Last update received from supplier</Label>
+                <Input type="date" value={form.last_supplier_update} onChange={e => set("last_supplier_update", e.target.value)} />
+              </div>
             </div>
           </div>
         </div>
@@ -800,28 +903,67 @@ function AttentionBanner({ pos, fab }: { pos: ProcurementPo[]; fab: ProcurementF
     !["delivered", "cancelled"].includes(f.status) &&
     f.expected_completion && daysUntil(f.expected_completion)! < 0
   );
+  // MH063-style: items not yet confirmed by supplier
+  const unconfirmedFab = fab.filter(f =>
+    !["delivered", "cancelled"].includes(f.status) &&
+    !f.supplier_confirmed
+  );
+  // Items where supplier hasn't updated us in >7 days
+  const staleFab = fab.filter(f =>
+    !["delivered", "cancelled"].includes(f.status) &&
+    f.supplier_confirmed &&
+    f.last_supplier_update &&
+    daysUntil(f.last_supplier_update)! < -7
+  );
 
-  const total = overduePOs.length + dueSoonPOs.length + overdueFab.length;
+  const total = overduePOs.length + dueSoonPOs.length + overdueFab.length + unconfirmedFab.length + staleFab.length;
   if (total === 0) return null;
 
   return (
-    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-1.5">
-      <p className="text-sm font-medium text-red-400">⚠ Attention needed ({total})</p>
-      {overduePOs.map(p => (
-        <p key={p.id} className="text-xs text-[var(--ink)]/70">
-          PO overdue: <span className="font-medium">{p.item_description}</span> from {p.supplier_name} — expected {new Date(p.expected_delivery!).toLocaleDateString("en-MY")}
-        </p>
-      ))}
-      {dueSoonPOs.map(p => (
-        <p key={p.id} className="text-xs text-[var(--ink)]/70">
-          PO due soon: <span className="font-medium">{p.item_description}</span> from {p.supplier_name} — {daysUntil(p.expected_delivery)} day(s) left
-        </p>
-      ))}
-      {overdueFab.map(f => (
-        <p key={f.id} className="text-xs text-[var(--ink)]/70">
-          Fab overdue: <span className="font-medium">{f.item_name}</span>{f.fab_vendor ? ` at ${f.fab_vendor}` : ""} — expected {new Date(f.expected_completion!).toLocaleDateString("en-MY")}
-        </p>
-      ))}
+    <div className="space-y-2">
+      {(overduePOs.length > 0 || dueSoonPOs.length > 0 || overdueFab.length > 0) && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-1.5">
+          <p className="text-sm font-medium text-red-400">⚠ Delivery alerts ({overduePOs.length + dueSoonPOs.length + overdueFab.length})</p>
+          {overduePOs.map(p => (
+            <p key={p.id} className="text-xs text-[var(--ink)]/70">
+              PO overdue: <span className="font-medium">{p.item_description}</span> from {p.supplier_name} — expected {new Date(p.expected_delivery!).toLocaleDateString("en-MY")}
+            </p>
+          ))}
+          {dueSoonPOs.map(p => (
+            <p key={p.id} className="text-xs text-[var(--ink)]/70">
+              PO due soon: <span className="font-medium">{p.item_description}</span> from {p.supplier_name} — {daysUntil(p.expected_delivery)} day(s) left
+            </p>
+          ))}
+          {overdueFab.map(f => (
+            <p key={f.id} className="text-xs text-[var(--ink)]/70">
+              Fab overdue: <span className="font-medium">{f.item_name}</span>{f.fab_vendor ? ` at ${f.fab_vendor}` : ""} — expected {new Date(f.expected_completion!).toLocaleDateString("en-MY")}
+            </p>
+          ))}
+        </div>
+      )}
+      {unconfirmedFab.length > 0 && (
+        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4 space-y-1.5">
+          <p className="text-sm font-medium text-orange-400">🔔 Awaiting supplier confirmation ({unconfirmedFab.length})</p>
+          <p className="text-xs text-[var(--ink)]/50">These fab items have not been confirmed by the supplier — fabrication may not have started yet.</p>
+          {unconfirmedFab.map(f => (
+            <p key={f.id} className="text-xs text-[var(--ink)]/70">
+              <span className="font-medium">{f.item_name}</span>
+              {f.fab_vendor ? ` — ${f.fab_vendor}` : ""}
+              {f.expected_completion ? ` (due ${new Date(f.expected_completion).toLocaleDateString("en-MY")})` : ""}
+            </p>
+          ))}
+        </div>
+      )}
+      {staleFab.length > 0 && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 space-y-1.5">
+          <p className="text-sm font-medium text-yellow-400">📵 No supplier update in &gt;7 days ({staleFab.length})</p>
+          {staleFab.map(f => (
+            <p key={f.id} className="text-xs text-[var(--ink)]/70">
+              <span className="font-medium">{f.item_name}</span>{f.fab_vendor ? ` at ${f.fab_vendor}` : ""} — last update {new Date(f.last_supplier_update!).toLocaleDateString("en-MY")}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1247,42 +1389,92 @@ export default function ProcurementPage() {
           {tab === "fab" && (
             <div className="space-y-2">
               {fab.length === 0 && <p className="text-sm text-[var(--ink)]/40 py-8 text-center">No fabrication items yet. Click "+ Add Fab Item" or scan a job order.</p>}
-              {fab.map(f => (
-                <div key={f.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-                  <div className="flex flex-wrap gap-3 items-start justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${FAB_STATUS_COLOR[f.status]}`}>{FAB_STATUS_LABEL[f.status]}</span>
-                        {f.extracted_by_ai && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-medium">AI</span>}
-                        {f.drawing_ref && <span className="text-xs text-[var(--ink)]/40">DWG: {f.drawing_ref}</span>}
+              {fab.map(f => {
+                const cl = f.requirements_checklist || { drawing_sent: false, spec_sent: false, po_confirmed: false, other: null };
+                const reqCount = [cl.drawing_sent, cl.spec_sent, cl.po_confirmed].filter(Boolean).length;
+                const isStale = f.supplier_confirmed && f.last_supplier_update && daysUntil(f.last_supplier_update)! < -7;
+                const isActive = !["delivered", "cancelled"].includes(f.status);
+                return (
+                  <div key={f.id} className={`bg-[var(--surface)] border rounded-xl p-4 ${
+                    isActive && !f.supplier_confirmed
+                      ? "border-orange-500/40"
+                      : isStale ? "border-yellow-500/30"
+                      : "border-[var(--border)]"
+                  }`}>
+                    <div className="flex flex-wrap gap-3 items-start justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${FAB_STATUS_COLOR[f.status]}`}>{FAB_STATUS_LABEL[f.status]}</span>
+                          {isActive && (
+                            f.supplier_confirmed
+                              ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-medium">✓ Supplier Confirmed</span>
+                              : <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 font-medium">⚠ Unconfirmed</span>
+                          )}
+                          {isStale && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 font-medium">📵 No update 7d+</span>}
+                          {f.extracted_by_ai && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-medium">AI</span>}
+                          {f.drawing_ref && <span className="text-xs text-[var(--ink)]/40">DWG: {f.drawing_ref}</span>}
+                        </div>
+                        <p className="font-medium text-[var(--ink)] mt-1">{f.item_name}</p>
+                        {f.fab_vendor && <p className="text-sm text-[var(--ink)]/60">{f.fab_vendor}</p>}
+                        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                          {f.expected_completion && <span className="text-xs text-[var(--ink)]/50">Due: {new Date(f.expected_completion).toLocaleDateString("en-MY")}</span>}
+                          {f.supplier_confirmed_delivery && (
+                            <span className="text-xs text-emerald-400">Supplier delivery: {new Date(f.supplier_confirmed_delivery).toLocaleDateString("en-MY")}</span>
+                          )}
+                          {f.quantity && <span className="text-xs text-[var(--ink)]/40">Qty: {f.quantity}</span>}
+                        </div>
+                        {isActive && (
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              cl.drawing_sent ? "bg-emerald-500/15 text-emerald-400" : "bg-[var(--border)] text-[var(--ink)]/30"
+                            }`}>Drawing {cl.drawing_sent ? "✓" : "✗"}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              cl.spec_sent ? "bg-emerald-500/15 text-emerald-400" : "bg-[var(--border)] text-[var(--ink)]/30"
+                            }`}>Spec {cl.spec_sent ? "✓" : "✗"}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              cl.po_confirmed ? "bg-emerald-500/15 text-emerald-400" : "bg-[var(--border)] text-[var(--ink)]/30"
+                            }`}>PO {cl.po_confirmed ? "✓" : "✗"}</span>
+                            <span className="text-[10px] text-[var(--ink)]/25">{reqCount}/3 sent</span>
+                          </div>
+                        )}
                       </div>
-                      <p className="font-medium text-[var(--ink)] mt-1">{f.item_name}</p>
-                      {f.fab_vendor && <p className="text-sm text-[var(--ink)]/60">{f.fab_vendor}</p>}
-                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                        {f.expected_completion && <span className="text-xs text-[var(--ink)]/50">Due: {new Date(f.expected_completion).toLocaleDateString("en-MY")}</span>}
-                        {f.quantity && <span className="text-xs text-[var(--ink)]/40">Qty: {f.quantity}</span>}
+                      <div className="text-right shrink-0">
+                        <p className="text-lg font-semibold text-[var(--ink)]">{fmt(f.cost, f.currency)}</p>
+                        {f.category && <p className="text-xs text-[var(--ink)]/40">{f.category}</p>}
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-lg font-semibold text-[var(--ink)]">{fmt(f.cost, f.currency)}</p>
-                      {f.category && <p className="text-xs text-[var(--ink)]/40">{f.category}</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border)] flex-wrap">
-                    <span className="text-xs text-[var(--ink)]/40 mr-1">Move to:</span>
-                    {FAB_STATUSES.filter(s => s !== f.status).map(s => (
-                      <button key={s} onClick={() => updateFabStatus(f.id, s)}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)]/60 hover:text-[var(--ink)] hover:border-[var(--accent)] transition-colors">
-                        {FAB_STATUS_LABEL[s]}
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border)] flex-wrap">
+                      <span className="text-xs text-[var(--ink)]/40 mr-1">Move to:</span>
+                      {FAB_STATUSES.filter(s => s !== f.status).map(s => {
+                        const blocked = s === "in_fabrication" && !f.supplier_confirmed;
+                        return (
+                          <button
+                            key={s}
+                            onClick={() => {
+                              if (blocked) {
+                                alert("Cannot move to In Fabrication — supplier has not yet confirmed they have all requirements. Edit the item and tick Supplier Confirmed.");
+                                return;
+                              }
+                              updateFabStatus(f.id, s);
+                            }}
+                            title={blocked ? "Supplier confirmation required" : undefined}
+                            className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                              blocked
+                                ? "bg-[var(--paper)] border-[var(--border)] text-[var(--ink)]/25 cursor-not-allowed"
+                                : "bg-[var(--paper)] border-[var(--border)] text-[var(--ink)]/60 hover:text-[var(--ink)] hover:border-[var(--accent)]"
+                            }`}>
+                            {blocked ? "🔒 " : ""}{FAB_STATUS_LABEL[s]}
+                          </button>
+                        );
+                      })}
+                      <button onClick={() => setFabModal({ open: true, item: f })}
+                        className="ml-auto text-xs px-2.5 py-1 rounded-lg bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)]/60 hover:text-[var(--ink)] transition-colors">
+                        Edit
                       </button>
-                    ))}
-                    <button onClick={() => setFabModal({ open: true, item: f })}
-                      className="ml-auto text-xs px-2.5 py-1 rounded-lg bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)]/60 hover:text-[var(--ink)] transition-colors">
-                      Edit
-                    </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -244,6 +244,13 @@ export interface ProcurementPo {
   updated_at: string;
 }
 
+export interface FabRequirementsChecklist {
+  drawing_sent: boolean;
+  spec_sent: boolean;
+  po_confirmed: boolean;
+  other: string | null;
+}
+
 export interface ProcurementFabItem {
   id: number;
   project_id: string;
@@ -258,6 +265,15 @@ export interface ProcurementFabItem {
   expected_completion: string | null;
   actual_completion: string | null;
   status: FabStatus;
+  // ── Supplier Readiness (migration 034) ──────────────────────────
+  requirements_checklist: FabRequirementsChecklist;
+  supplier_confirmed: boolean;
+  supplier_confirmed_date: string | null;
+  supplier_confirmed_start: string | null;
+  supplier_confirmed_delivery: string | null;
+  last_supplier_update: string | null;
+  supplier_confirmed_by: string | null;
+  // ────────────────────────────────────────────────────────────────
   source_doc_url: string | null;
   extracted_by_ai: boolean;
   raw_ai_json: Record<string, unknown> | null;
