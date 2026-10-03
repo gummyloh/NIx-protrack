@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { useInternalAuth } from "@/lib/internalAuth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ const DEFAULT_CHECKLIST: Omit<ChecklistItem, "id" | "fat_id" | "notes">[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function FatPage() {
-  const supabase = createClient();
+
   const { isAdmin } = useInternalAuth();
 
   const [records, setRecords]     = useState<FatRecord[]>([]);
