@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { Task, ProcurementPo, ProcurementFabItem, PoStatus } from "@/lib/types";
+import { Task, ProcurementPo, ProcurementFabItem, PoStatus, BomItem } from "@/lib/types";
+import { bomFlags, normalizeBomItems, isActive, isFinalized, isOrdered, isReceived, pct, todayIso } from "@/lib/bom";
 import { useProjectId, withProject } from "@/lib/useProjectId";
 import UpdateAnalyzer from "./UpdateAnalyzer";
 import {
@@ -46,6 +47,7 @@ export default function Dashboard() {
   // Procurement state
   const [openPos, setOpenPos] = useState<ProcurementPo[]>([]);
   const [overdueFab, setOverdueFab] = useState<ProcurementFabItem[]>([]);
+  const [bomItems, setBomItems] = useState<BomItem[]>([]);
 
   const [riskDigest, setRiskDigest] = useState<RiskDigestItem[] | null>(null);
   const [riskDigestGeneratedAt, setRiskDigestGeneratedAt] = useState<string | null>(null);
@@ -84,10 +86,16 @@ export default function Dashboard() {
     setOverdueFab((fabRes.data as ProcurementFabItem[]) || []);
   }, [projectId]);
 
+  const loadBom = useCallback(async () => {
+    const { data } = await supabase.from("bom_items").select("*").eq("project_id", projectId);
+    setBomItems(normalizeBomItems(data));
+  }, [projectId]);
+
   useEffect(() => {
     loadTasks();
     loadProcurement();
-  }, [loadTasks, loadProcurement]);
+    loadBom();
+  }, [loadTasks, loadProcurement, loadBom]);
 
   // Loads whatever was cached by a previous "Refresh" click (by anyone on
   // the project, not just you) -- never calls Claude on its own. Phase 1 of
@@ -408,6 +416,9 @@ export default function Dashboard() {
       {/* Procurement snapshot */}
       <ProcurementWidget openPos={openPos} overdueFab={overdueFab} projectId={projectId} />
 
+      {/* BOM snapshot */}
+      <BomWidget items={bomItems} projectId={projectId} />
+
       {/* Risk digest -- AI layer, phase 1. Manually triggered, internal only. */}
       <div className="panel p-5 mt-6">
         <div className="flex items-center justify-between gap-3 mb-1">
@@ -585,6 +596,79 @@ function ProcurementWidget({
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── BOM snapshot widget ─────────────────────────────────────────────
+
+function BomWidget({ items, projectId }: { items: BomItem[]; projectId: string }) {
+  const today = todayIso();
+  const active = items.filter(isActive);
+  const n = active.length;
+  const finalized = active.filter(isFinalized).length;
+  const ordered = active.filter(isOrdered).length;
+  const received = active.filter(isReceived).length;
+  const flagged = active.map((i) => ({ i, f: bomFlags(i, today) }));
+  const overdue = flagged.filter((x) => x.f.includes("OVERDUE"));
+  const lateVsReq = flagged.filter((x) => x.f.includes("LATE_VS_REQ"));
+  const needPr = flagged.filter((x) => x.f.includes("NEED_PR")).length;
+
+  return (
+    <div className="panel p-5 mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium">BOM progress</h2>
+        <Link href={withProject("/internal/bom", projectId)} className="text-xs text-[var(--ink)]/50 hover:text-[var(--accent)] underline">
+          {n ? "Open BOM →" : "Set up BOM →"}
+        </Link>
+      </div>
+      {n === 0 ? (
+        <p className="text-sm text-[var(--ink)]/50">No BOM yet — import the engineers&apos; Excel list to track parts by station.</p>
+      ) : (
+        <>
+          <div className="space-y-2 mb-4">
+            {([
+              ["Design finalized", finalized, "#9aa5c4"],
+              ["Ordered", ordered, "#f0a35e"],
+              ["Received", received, "var(--accent)"],
+            ] as [string, number, string][]).map(([l, v, c]) => (
+              <div key={l} className="flex items-center gap-3 text-sm">
+                <span className="w-32 text-[var(--ink)]/60">{l}</span>
+                <div className="flex-1 h-2 rounded-full bg-[var(--line)] overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${pct(v, n)}%`, background: c }} />
+                </div>
+                <span className="w-20 text-right font-mono-num text-xs text-[var(--ink)]/60">{v}/{n} · {pct(v, n)}%</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 flex-wrap text-xs">
+            <span className="px-2 py-1 rounded-full" style={{ background: overdue.length ? "#a13d2f1a" : "var(--paper)", color: overdue.length ? "var(--rust)" : undefined }}>
+              {overdue.length} overdue
+            </span>
+            <span className="px-2 py-1 rounded-full" style={{ background: lateVsReq.length ? "#a13d2f1a" : "var(--paper)", color: lateVsReq.length ? "var(--rust)" : undefined }}>
+              {lateVsReq.length} arriving after required date
+            </span>
+            <span className="px-2 py-1 rounded-full bg-[var(--paper)]" style={{ color: needPr ? "#9c5700" : undefined }}>
+              {needPr} need PR
+            </span>
+          </div>
+          {overdue.length > 0 && (
+            <div className="space-y-1.5 mt-3">
+              {overdue.slice(0, 5).map(({ i }) => (
+                <div key={i.id} className="flex items-center justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{i.description}</p>
+                    <p className="text-xs text-[var(--ink)]/50 truncate">{[i.part_no, i.supplier].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: "#a13d2f1a", color: "var(--rust)" }}>
+                    ETA {i.eta}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

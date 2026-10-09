@@ -48,6 +48,15 @@ function IconClipboardCheck({ className }: { className?: string }) {
   );
 }
 
+// Clipboard list icon for the BOM
+function IconListBullet({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+    </svg>
+  );
+}
+
 interface ProjectRow {
   name: string;
   customer: string;
@@ -139,6 +148,7 @@ export default function InternalNav({
             { label: "Task Table", path: "/internal/tasks", icon: IconTable },
             { label: "Gantt Chart", path: "/internal/gantt", icon: IconBarChart },
             { label: "Module Rollup", path: "/internal/modules", icon: IconLayers },
+            { label: "BOM List", path: "/internal/bom", icon: IconListBullet },
             { label: "Progress", path: "/internal/progress", icon: IconTrendUp },
           ],
         },

@@ -332,3 +332,73 @@ export const DEPARTMENTS = [
 ] as const;
 
 export type Department = (typeof DEPARTMENTS)[number];
+
+// ─── BOM (Bill of Materials) ───────────────────────────────────────────
+export type BomStatus =
+  | 'not_finalized' | 'finalized' | 'purchased' | 'received'
+  | 'nsw_purchased' | 'nsw_requested' | 'cancelled';
+export type BomDiscipline = 'mechanical' | 'electrical' | 'pneumatic' | 'software' | 'others';
+export type BomMakeBuy = 'buy' | 'make' | 'customer';
+
+export interface BomItem {
+  id: number;
+  project_id: string;
+  station_id: number | null;
+  sub_assembly: string | null;
+  discipline: BomDiscipline;
+  description: string;
+  part_no: string | null;
+  manufacturer: string | null;
+  category: string | null;
+  qty: number | null;
+  multiple: number;
+  total_qty: number | null; // generated: qty * multiple
+  unit: string;
+  make_buy: BomMakeBuy;
+  drawing_no: string | null;
+  nsw_part_no: string | null;
+  engineer_pic: string | null;
+  issue_date: string | null;
+  required_date: string | null;
+  status: BomStatus;
+  supplier: string | null;
+  pr_no: string | null;
+  po_no: string | null;
+  po_date: string | null;
+  eta: string | null;
+  do_invoice_no: string | null;
+  qty_received: number | null;
+  received_date: string | null;
+  unit_price: number | null;
+  currency: string;
+  linked_po_id: number | null;
+  linked_fab_id: number | null;
+  qty_issued: number | null;
+  issued_to: string | null;
+  issued_date: string | null;
+  show_to_client: boolean;
+  remarks: string | null;
+  sort_order: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BomClientStatus = 'in_design' | 'released' | 'ordered' | 'received';
+
+export interface ClientBomRow {
+  id: number;
+  module_name: string | null;
+  module_seq: number | null;
+  station_name: string | null;
+  station_seq: number | null;
+  sub_assembly: string | null;
+  discipline: BomDiscipline;
+  description: string;
+  part_no: string | null;
+  manufacturer: string | null;
+  total_qty: number | null;
+  unit: string;
+  drawing_no: string | null;
+  client_status: BomClientStatus;
+  eta: string | null;
+}

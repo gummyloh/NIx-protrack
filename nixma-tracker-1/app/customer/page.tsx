@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MeetingNote } from "@/lib/types";
+import { MeetingNote, ClientBomRow, BomClientStatus } from "@/lib/types";
+import { CLIENT_STATUS_LABEL, BOM_DISCIPLINE_LABEL } from "@/lib/bom";
 import { ClientSnapshot } from "@/lib/clientSnapshot";
 import { STATUS_LABEL, STATUS_COLOR } from "@/lib/schedule";
 
@@ -48,6 +49,7 @@ export default function CustomerView() {
   const [project, setProject] = useState<ProjectRow | null>(null);
   const [notes, setNotes] = useState<MeetingNote[]>([]);
   const [photos, setPhotos] = useState<ClientPhoto[]>([]);
+  const [bom, setBom] = useState<ClientBomRow[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -64,11 +66,12 @@ export default function CustomerView() {
       // is always exactly what the team chose to share, as of when they
       // clicked "Publish". Photos work the same way -- only ones an admin
       // has explicitly flagged "Show to customer" ever reach this page.
-      const [updateRes, projectRes, notesRes, photosRes] = await Promise.all([
+      const [updateRes, projectRes, notesRes, photosRes, bomRes] = await Promise.all([
         fetch("/api/customer-update").then((r) => r.json()),
         fetch("/api/customer-project").then((r) => r.json()),
         fetch("/api/customer-meeting-notes").then((r) => r.json()),
         fetch("/api/customer-photos").then((r) => r.json()),
+        fetch("/api/customer-bom").then((r) => r.json()).catch(() => ({ ok: false })),
       ]);
       if (!updateRes.ok || !projectRes.ok) {
         router.replace("/customer/login");
@@ -78,6 +81,7 @@ export default function CustomerView() {
       setProject(projectRes.project as ProjectRow);
       setNotes(notesRes.ok ? notesRes.notes : []);
       setPhotos(photosRes.ok ? photosRes.photos : []);
+      setBom(bomRes.ok ? (bomRes.items as ClientBomRow[]) : []);
       setLoading(false);
     })();
   }, [router]);
@@ -306,6 +310,8 @@ export default function CustomerView() {
         </>
       )}
 
+      {bom.length > 0 && <ClientBom rows={bom} />}
+
       {photos.length > 0 && (
         <div className="mt-6">
           <h2 className="text-sm font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-3">
@@ -352,5 +358,98 @@ export default function CustomerView() {
         </div>
       )}
     </main>
+  );
+}
+
+// ─── Bill of materials (only when the team has switched sharing on) ───
+
+const CLIENT_STAGE_ORDER: BomClientStatus[] = ["in_design", "released", "ordered", "received"];
+const CLIENT_STAGE_COLOR: Record<BomClientStatus, string> = {
+  in_design: "var(--muted)",
+  released: "#9aa5c4",
+  ordered: "#f0a35e",
+  received: "var(--accent)",
+};
+
+function ClientBom({ rows }: { rows: ClientBomRow[] }) {
+  const total = rows.length;
+  const atLeast = (s: BomClientStatus) =>
+    rows.filter((r) => CLIENT_STAGE_ORDER.indexOf(r.client_status) >= CLIENT_STAGE_ORDER.indexOf(s)).length;
+  const groups = new Map<string, ClientBomRow[]>();
+  rows.forEach((r) => {
+    const k = r.module_name ?? "Other";
+    groups.set(k, [...(groups.get(k) ?? []), r]);
+  });
+  const p = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+
+  return (
+    <div className="mt-6">
+      <h2 className="text-sm font-mono uppercase tracking-wide text-[var(--ink)]/50 mb-3">Bill of materials</h2>
+      <div className="panel p-5">
+        <div className="grid sm:grid-cols-3 gap-4 mb-5">
+          {(["released", "ordered", "received"] as BomClientStatus[]).map((s) => (
+            <div key={s}>
+              <div className="flex items-baseline justify-between text-sm mb-1">
+                <span className="text-[var(--ink)]/60">{CLIENT_STATUS_LABEL[s]}</span>
+                <span className="font-mono-num font-semibold">{p(atLeast(s), total)}%</span>
+              </div>
+              <div className="h-2 bg-[var(--line)] rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${p(atLeast(s), total)}%`, background: CLIENT_STAGE_COLOR[s] }} />
+              </div>
+              <p className="text-[11px] text-[var(--ink)]/40 mt-1 font-mono-num">{atLeast(s)} of {total} parts</p>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {[...groups.entries()].map(([mod, list]) => {
+            const rcvd = list.filter((r) => r.client_status === "received").length;
+            return (
+              <details key={mod} className="rounded-lg border border-[var(--line)]">
+                <summary className="cursor-pointer px-3 py-2 flex items-center gap-3 text-sm">
+                  <span className="font-medium flex-1">{mod}</span>
+                  <span className="text-xs text-[var(--ink)]/50 font-mono-num">{rcvd}/{list.length} received</span>
+                </summary>
+                <div className="overflow-x-auto border-t border-[var(--line)]">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-[var(--ink)]/45">
+                        <th className="px-3 py-1.5 font-medium">Station</th>
+                        <th className="px-3 py-1.5 font-medium">Part</th>
+                        <th className="px-3 py-1.5 font-medium text-right">Qty</th>
+                        <th className="px-3 py-1.5 font-medium">Status</th>
+                        <th className="px-3 py-1.5 font-medium">ETA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((r) => (
+                        <tr key={r.id} className="border-t border-[var(--line)]">
+                          <td className="px-3 py-1.5 text-[var(--ink)]/60">{r.station_name ?? "—"}</td>
+                          <td className="px-3 py-1.5">
+                            <p className="font-medium">{r.description}</p>
+                            <p className="text-[var(--ink)]/45 font-mono">
+                              {[r.part_no, r.manufacturer, BOM_DISCIPLINE_LABEL[r.discipline]].filter(Boolean).join(" · ")}
+                            </p>
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-mono-num">{r.total_qty != null ? Number(r.total_qty) : "—"} {r.unit}</td>
+                          <td className="px-3 py-1.5">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full" style={{ background: CLIENT_STAGE_COLOR[r.client_status] }} />
+                              {CLIENT_STATUS_LABEL[r.client_status]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 font-mono-num text-[var(--ink)]/60">
+                            {r.eta && r.client_status !== "received" ? new Date(r.eta + "T12:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
