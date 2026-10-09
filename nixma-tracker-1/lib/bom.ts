@@ -160,11 +160,10 @@ export interface BomCounts {
   received: number;
   overdue: number;
   flagged: number;
-  value: number;
 }
 
 function emptyCounts(): BomCounts {
-  return { lines: 0, finalized: 0, ordered: 0, received: 0, overdue: 0, flagged: 0, value: 0 };
+  return { lines: 0, finalized: 0, ordered: 0, received: 0, overdue: 0, flagged: 0 };
 }
 
 function addTo(c: BomCounts, item: BomItem, today: string) {
@@ -176,7 +175,6 @@ function addTo(c: BomCounts, item: BomItem, today: string) {
   if (isReceived(item)) c.received += 1;
   if (flags.includes("OVERDUE")) c.overdue += 1;
   if (flags.length) c.flagged += 1;
-  if (item.unit_price != null && item.total_qty != null) c.value += item.unit_price * item.total_qty;
 }
 
 export interface StationBomRollup {

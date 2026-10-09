@@ -49,7 +49,8 @@ export default function ImportModal({
     setBusy(true);
     try {
       const res = await readBomFile(f);
-      if (!canViewProcurement) res.rows.forEach((r) => delete r.unit_price);
+      // The BOM tracks progress only — prices in the file are ignored.
+      res.rows.forEach((r) => delete r.unit_price);
       setRead(res);
       const groups = [...new Set(res.rows.map(groupOf))];
       const init: Record<string, string> = {};

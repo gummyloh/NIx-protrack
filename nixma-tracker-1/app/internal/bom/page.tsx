@@ -35,7 +35,6 @@ function fmtDate(d: string | null) {
   if (!d) return "—";
   return new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
-const money = (n: number) => n.toLocaleString("en-MY", { maximumFractionDigits: 0 });
 
 function StatusChip({ s }: { s: BomStatus }) {
   const st = BOM_STATUS_STYLE[s];
@@ -209,7 +208,7 @@ export default function BomPage() {
     setExporting(true);
     try {
       const blob = await exportBomXlsx({
-        items, modules, stations, project, mode, includePrices: mode === "internal" && canViewProcurement,
+        items, modules, stations, project, mode,
       });
       const code = project.project_code || projectId;
       const d = today.replace(/-/g, "");
@@ -272,9 +271,7 @@ export default function BomPage() {
           { l: "Ordered", v: `${pct(t.ordered, t.lines)}%`, sub: `${t.ordered} of ${t.lines}`, c: "#c06a1c" },
           { l: "Received", v: `${pct(t.received, t.lines)}%`, sub: `${t.received} of ${t.lines}`, c: "var(--accent)" },
           { l: "Overdue", v: String(t.overdue), sub: "ETA passed", c: t.overdue ? "var(--rust)" : "var(--ink)" },
-          canViewProcurement
-            ? { l: "BOM value", v: `RM ${money(t.value)}`, sub: "priced lines only", c: "var(--ink)" }
-            : { l: "Need attention", v: String(t.flagged), sub: "lines with flags", c: t.flagged ? "#9c5700" : "var(--ink)" },
+          { l: "Need attention", v: String(t.flagged), sub: "lines with flags", c: t.flagged ? "#9c5700" : "var(--ink)" },
         ].map((k) => (
           <div key={k.l} className="panel p-4">
             <p className="text-[11px] text-[var(--ink)]/50 uppercase tracking-wide font-mono">{k.l}</p>
@@ -426,7 +423,6 @@ export default function BomPage() {
                   <th className="px-3 py-2 font-medium">Supplier / PO</th>
                   <th className="px-3 py-2 font-medium">Required</th>
                   <th className="px-3 py-2 font-medium">ETA</th>
-                  {canViewProcurement && <th className="px-3 py-2 font-medium text-right">Value (RM)</th>}
                   <th className="px-3 py-2 font-medium">Flags</th>
                 </tr>
               </thead>
@@ -491,11 +487,6 @@ export default function BomPage() {
                       <td className={`px-3 py-2 text-xs font-mono-num whitespace-nowrap ${fl.includes("OVERDUE") ? "text-[var(--rust)] font-semibold" : "text-[var(--ink)]/60"}`}>
                         {fmtDate(i.eta || po?.expected_delivery || null)}
                       </td>
-                      {canViewProcurement && (
-                        <td className="px-3 py-2 text-right text-xs font-mono-num text-[var(--ink)]/60">
-                          {i.unit_price != null && i.total_qty != null ? money(i.unit_price * Number(i.total_qty)) : "—"}
-                        </td>
-                      )}
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">{fl.map((f) => <FlagChip key={f} f={f} />)}</div>
                       </td>
@@ -503,7 +494,7 @@ export default function BomPage() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={10} className="px-3 py-8 text-center text-sm text-[var(--ink)]/40">No parts match these filters.</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-[var(--ink)]/40">No parts match these filters.</td></tr>
                 )}
               </tbody>
             </table>

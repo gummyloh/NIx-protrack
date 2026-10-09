@@ -19,7 +19,7 @@ const TEXT = [
   "sub_assembly", "description", "part_no", "manufacturer", "category", "unit", "drawing_no",
   "nsw_part_no", "engineer_pic", "supplier", "pr_no", "po_no", "do_invoice_no", "issued_to", "remarks",
 ] as const;
-const NUM = ["qty", "multiple", "qty_received", "unit_price", "qty_issued"] as const;
+const NUM = ["qty", "multiple", "qty_received", "qty_issued"] as const;
 const DATE = ["issue_date", "required_date", "po_date", "eta", "received_date", "issued_date"] as const;
 
 // Defined at module level so React keeps the same component identity
@@ -92,10 +92,6 @@ export default function ItemModal({
     p.station_id = form.station_id ? Number(form.station_id) : null;
     p.show_to_client = !!form.show_to_client;
     if (canViewProcurement) p.linked_po_id = form.linked_po_id ? Number(form.linked_po_id) : null;
-    else {
-      // Users who can't see prices never overwrite them.
-      delete p.unit_price;
-    }
     return p;
   }
 
@@ -227,7 +223,6 @@ export default function ItemModal({
             {T("do_invoice_no", "DO / invoice no.")}
             {N("qty_received", "Qty received")}
             {D("received_date", "Received date")}
-            {canViewProcurement && N("unit_price", "Unit price (RM)")}
             {canViewProcurement && (
               <div className="col-span-2 sm:col-span-4">
                 <label className={label}>Linked PO in Procurement</label>

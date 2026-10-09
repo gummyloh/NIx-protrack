@@ -97,10 +97,10 @@ describe("computeBomRollup", () => {
     { id: 1, module_id: 10, project_id: "p", name: "Singulator", sequence: 1, created_at: "" },
     { id: 2, module_id: 10, project_id: "p", name: "Indexer", sequence: 2, created_at: "" },
   ];
-  it("counts per station, module and total; cancelled excluded; value = price × total qty", () => {
+  it("counts per station, module and total; cancelled excluded", () => {
     const r = computeBomRollup(
       [
-        item({ id: 1, status: "received", unit_price: 10 }),
+        item({ id: 1, status: "received" }),
         item({ id: 2, status: "purchased", station_id: 2, eta: "2026-10-01" }),
         item({ id: 3, status: "cancelled" }),
         item({ id: 4, station_id: null }),
@@ -109,7 +109,7 @@ describe("computeBomRollup", () => {
       stations,
       TODAY
     );
-    expect(r.total).toMatchObject({ lines: 3, finalized: 2, ordered: 2, received: 1, overdue: 1, value: 20 });
+    expect(r.total).toMatchObject({ lines: 3, finalized: 2, ordered: 2, received: 1, overdue: 1 });
     expect(r.modules[0].stations[0].counts.lines).toBe(1);
     expect(r.modules[0].stations[1].counts.overdue).toBe(1);
     expect(r.modules[0].counts.lines).toBe(2);

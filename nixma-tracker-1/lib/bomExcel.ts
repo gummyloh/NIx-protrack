@@ -81,10 +81,9 @@ interface ExportArgs {
   stations: StationRow[];
   project: { name: string; customer: string | null; project_code: string | null };
   mode: "internal" | "customer";
-  includePrices: boolean;
 }
 
-type Col = { header: string; width: number; get: (i: BomItem, ctx: Ctx) => unknown; date?: boolean; money?: boolean; group: "E" | "P" | "A" | "x" };
+type Col = { header: string; width: number; get: (i: BomItem, ctx: Ctx) => unknown; date?: boolean; group: "E" | "P" | "A" | "x" };
 interface Ctx { itemNo: string; station?: StationRow; module?: ModuleRow; flags: string }
 
 const GROUP_FILL: Record<Col["group"], string> = { E: "FFDDEBF7", P: "FFE2EFDA", A: "FFFCE4D6", x: "FF1F3864" };
@@ -142,12 +141,6 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
     { header: "DO / Invoice No.", width: 13, group: "P", get: (i) => i.do_invoice_no },
     { header: "Qty Received", width: 9, group: "P", get: (i) => i.qty_received },
     { header: "Received Date", width: 11, group: "P", date: true, get: (i) => iso(i.received_date) },
-    ...(a.includePrices
-      ? ([
-          { header: "Unit Price (RM)", width: 11, group: "P", money: true, get: (i) => i.unit_price },
-          { header: "Total Price (RM)", width: 12, group: "x", money: true, get: (i) => (i.unit_price != null && i.total_qty != null ? i.unit_price * i.total_qty : null) },
-        ] as Col[])
-      : []),
     { header: "Qty Issued", width: 8, group: "A", get: (i) => i.qty_issued },
     { header: "Taken By", width: 11, group: "A", get: (i) => i.issued_to },
     { header: "Issue Date (Assy)", width: 11, group: "A", date: true, get: (i) => iso(i.issued_date) },
@@ -217,7 +210,6 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
       cell.value = (v ?? null) as never;
       cell.font = { name: "Arial", size: 10 };
       if (c.date) cell.numFmt = "dd-mmm-yy";
-      if (c.money) cell.numFmt = "#,##0.00";
       cell.border = { bottom: { style: "hair", color: { argb: "FFBFBFBF" } } };
     });
   });
