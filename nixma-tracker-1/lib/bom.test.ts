@@ -8,6 +8,8 @@ import {
   parseDate,
   parseStatus,
   planImport,
+  disciplineFromCategory,
+  fileMayChangeStatus,
   guessStation,
   toClientStatus,
   normalizeBomItems,
@@ -15,6 +17,7 @@ import {
 
 function item(o: Partial<BomItem> & { id: number }): BomItem {
   return {
+    row_id: `R${String(o.id).padStart(4, "0")}`,
     project_id: "p",
     station_id: 1,
     sub_assembly: "120 SINGULATOR",
@@ -203,5 +206,133 @@ describe("normalizeBomItems", () => {
     expect(n.total_qty).toBe(10);
     expect(n.unit_price).toBeNull();
     expect(bomFlags({ ...item({ id: 1 }), ...n, status: "received" }, TODAY)).toContain("SHORT");
+  });
+});
+
+describe("v4 template: Row ID, ownership and revisions", () => {
+  const hm = mapHeaders(["Item", "Sub-Assembly", "Description", "Manufacturer Part No.", "Manufacturer", "Qty / Set", "Status", "Supplier", "Remarks", "Row ID"]);
+
+  it("reads the hidden Row ID column", () => {
+    expect([...hm.values()]).toContain("row_id");
+  });
+
+  it("title rows and the UNASSIGNED banner are ignored; a real part that names its sub-assembly is kept even without qty", () => {
+    const { rows, sections } = parseBomRows(
+      [
+        ["MH063-100  ·  MACHINE BASE", null, "MH063-100  ·  MACHINE BASE", null, null, null, null, null, null, null],
+        ["MH063-110-00", null, "MH063-110-00", null, null, null, null, null, null, null],
+        ["110-01", "MH063-110-00", "Curtain Sensor", "BW20-32", "Autonics", 1, "Finalized – Not Purchased", null, null, "R0001"],
+        ["110-02", "MH063-110-00", "MH063-110-005", null, null, null, null, null, null, "R0002"], // fabricated part, qty not filled yet
+        [null, null, "UNASSIGNED  ·  ⚠  Sub-Assembly not set", null, null, null, null, null, null, null],
+        [null, null, "Sample", null, null, 8, null, null, null, "R0003"],
+      ],
+      hm,
+      11
+    );
+    expect(sections).toBe(3);
+    expect(rows.map((r) => r.description)).toEqual(["Curtain Sensor", "MH063-110-005", "Sample"]);
+    expect(rows[0].row_id).toBe("R0001");
+  });
+
+  it("matches by Row ID even when the description changed", () => {
+    const existing = [item({ id: 1 })];
+    const plan = planImport([{ source_row: 11, row_id: "R0001", description: "CYLINDER (revised)", part_no: "CDU16-25D", sub_assembly: "120 SINGULATOR" }], existing);
+    expect(plan.inserts).toHaveLength(0);
+    expect(plan.updates[0]).toMatchObject({ id: 1, changed: ["description"] });
+  });
+
+  it("re-importing the same file twice never multiplies identical lines", () => {
+    // Three identical "Air Cylinder" lines, as in MH063.
+    const file = ["R0001", "R0002", "R0003"].map((row_id, n) => ({
+      source_row: 11 + n, row_id, sub_assembly: "MH063-120-00", description: "Air Cylinder", qty: 2,
+    }));
+    const first = planImport(file, []);
+    expect(first.inserts).toHaveLength(3);
+    const existing = file.map((r, n) => item({ id: n + 1, row_id: r.row_id, sub_assembly: r.sub_assembly, description: r.description, part_no: null, qty: 2, total_qty: 2 }));
+    const second = planImport(file, existing);
+    expect(second.inserts).toHaveLength(0);
+    expect(second.unchanged).toBe(3);
+  });
+
+  it("legacy files without Row IDs pair identical lines one-to-one (no duplicates on re-import)", () => {
+    const line = { sub_assembly: "MH063-120-00", description: "06-050", qty: 2 };
+    const existing = [1, 2, 3].map((id) => item({ id, ...line, part_no: null, total_qty: 2 }));
+    const plan = planImport([1, 2, 3].map((n) => ({ source_row: n, ...line })), existing);
+    expect(plan.inserts).toHaveLength(0);
+    expect(plan.unchanged).toBe(3);
+    // one more line in the file than in the tracker → exactly one new part
+    expect(planImport([1, 2, 3, 4].map((n) => ({ source_row: n, ...line })), existing).inserts).toHaveLength(1);
+  });
+
+  it("engineering columns refresh; purchasing and assembly columns are never overwritten on existing parts", () => {
+    const existing = [item({ id: 1, status: "purchased", supplier: "Misumi", po_no: "PO-1", eta: "2026-11-01", qty_issued: 1 })];
+    const plan = planImport(
+      [{ source_row: 11, row_id: "R0001", qty: 4, status: "finalized", supplier: "Someone else", po_no: "PO-2", eta: "2026-12-01", qty_issued: 9 }],
+      existing
+    );
+    expect(plan.updates).toHaveLength(1);
+    expect(plan.updates[0].patch).toEqual({ qty: 4 });
+    expect(plan.ignoredOwned).toBe(5);
+  });
+
+  it("new parts are seeded with everything in the file, purchasing columns included", () => {
+    const plan = planImport([{ source_row: 11, row_id: "R0100", description: "NEW", status: "purchased", supplier: "SMC", po_no: "PO-7" }], []);
+    expect(plan.inserts[0]).toMatchObject({ status: "purchased", supplier: "SMC", po_no: "PO-7", row_id: "R0100" });
+  });
+
+  it("a file may release a design or cancel an unordered part, nothing else about status", () => {
+    expect(fileMayChangeStatus("not_finalized", "finalized")).toBe(true);
+    expect(fileMayChangeStatus("finalized", "cancelled")).toBe(true);
+    expect(fileMayChangeStatus("purchased", "cancelled")).toBe(false);
+    expect(fileMayChangeStatus("received", "finalized")).toBe(false);
+    expect(fileMayChangeStatus("purchased", "not_finalized")).toBe(false);
+    const plan = planImport([{ source_row: 1, row_id: "R0001", status: "finalized" }], [item({ id: 1, status: "not_finalized" })]);
+    expect(plan.updates[0].patch.status).toBe("finalized");
+  });
+
+  it("flags engineering changes to parts that are already ordered", () => {
+    const existing = [item({ id: 1, status: "purchased" }), item({ id: 2, status: "not_finalized" })];
+    const plan = planImport(
+      [
+        { source_row: 1, row_id: "R0001", qty: 8, remarks: "rev B" },
+        { source_row: 2, row_id: "R0002", qty: 8 },
+      ],
+      existing
+    );
+    expect(plan.updates.find((u) => u.id === 1)!.orderSensitive).toEqual(["qty"]);
+    expect(plan.updates.find((u) => u.id === 2)!.orderSensitive).toEqual([]);
+  });
+
+  it("lists parts the new revision dropped, but only when the file carries Row IDs", () => {
+    const existing = [item({ id: 1 }), item({ id: 2 }), item({ id: 3, status: "cancelled" })];
+    const withIds = planImport([{ source_row: 1, row_id: "R0001", description: "CYLINDER" }], existing);
+    expect(withIds.missing.map((m) => m.id)).toEqual([2]); // 3 is already cancelled
+    const withoutIds = planImport([{ source_row: 1, sub_assembly: "120 SINGULATOR", description: "CYLINDER", part_no: "CDU16-25D" }], existing);
+    expect(withoutIds.missing).toEqual([]);
+    // rows the user chose to leave out of the import still count as "in the file"
+    const skipped = planImport([{ source_row: 1, row_id: "R0001", description: "CYLINDER" }], existing, { presentRowIds: ["R0001", "R0002"] });
+    expect(skipped.missing).toEqual([]);
+  });
+
+  it("a Row ID repeated inside the file gets a fresh id for the extra copy", () => {
+    const plan = planImport(
+      [
+        { source_row: 1, row_id: "R0500", description: "A" },
+        { source_row: 2, row_id: "R0500", description: "A copy" },
+      ],
+      []
+    );
+    expect(plan.inserts[0].row_id).toBe("R0500");
+    expect(plan.inserts[1].row_id).toBeUndefined();
+  });
+
+  it("discipline falls back to the category", () => {
+    expect(disciplineFromCategory("Pneumatic")).toBe("pneumatic");
+    expect(disciplineFromCategory("Electrical / Control")).toBe("electrical");
+    expect(disciplineFromCategory("Sensor")).toBe("electrical");
+    expect(disciplineFromCategory("Fabricated Part")).toBe("mechanical");
+    expect(disciplineFromCategory("Vision")).toBe("software");
+    expect(disciplineFromCategory("Something else")).toBeNull();
+    expect(disciplineFromCategory(null)).toBeNull();
   });
 });
