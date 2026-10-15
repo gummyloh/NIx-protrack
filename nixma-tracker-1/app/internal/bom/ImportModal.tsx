@@ -3,7 +3,16 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BomDiscipline, BomItem, ModuleRow, StationRow } from "@/lib/types";
-import { BOM_DISCIPLINES, BOM_DISCIPLINE_LABEL, ParsedBomRow, guessStation, planImport } from "@/lib/bom";
+import {
+  BOM_DISCIPLINES,
+  BOM_DISCIPLINE_LABEL,
+  ParsedBomRow,
+  disciplineFromCategory,
+  guessStation,
+  isOrdered,
+  isReceived,
+  planImport,
+} from "@/lib/bom";
 import { readBomFile, ReadResult } from "@/lib/bomExcel";
 
 const NONE = "__none__";
@@ -32,6 +41,10 @@ export default function ImportModal({
   const [defaultDiscipline, setDefaultDiscipline] = useState<BomDiscipline>("mechanical");
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [progress, setProgress] = useState<string | null>(null);
+  // Rows with no Sub-Assembly are junk/leftovers in the company template (it hides them from Progress and the
+  // customer view too), so they stay out of the tracker unless someone opts in.
+  const [skipUnassigned, setSkipUnassigned] = useState(true);
+  const [cancelMissing, setCancelMissing] = useState(false);
 
   const stationByName = useMemo(() => {
     const m = new Map<string, number>();
@@ -66,13 +79,33 @@ export default function ImportModal({
     setBusy(false);
   }
 
-  const plan = useMemo(() => (read ? planImport(read.rows, existing) : null), [read, existing]);
-  const groups = useMemo(() => {
+  const fileHasStructure = !!read?.rows.some((r) => r.sub_assembly || r.station_name);
+  const unassigned = useMemo(
+    () => (read && fileHasStructure ? read.rows.filter((r) => !r.sub_assembly && !r.station_name) : []),
+    [read, fileHasStructure]
+  );
+  const rows = useMemo(() => {
     if (!read) return [];
+    return skipUnassigned && fileHasStructure ? read.rows.filter((r) => r.sub_assembly || r.station_name) : read.rows;
+  }, [read, skipUnassigned, fileHasStructure]);
+
+  const plan = useMemo(
+    () =>
+      read
+        ? planImport(rows, existing, {
+            // Judge "not in this file" against every row of the file, including ones the user chose to skip.
+            presentRowIds: read.rows.map((r) => r.row_id).filter((x): x is string => !!x),
+          })
+        : null,
+    [read, rows, existing]
+  );
+  const groups = useMemo(() => {
     const counts = new Map<string, number>();
-    read.rows.forEach((r) => counts.set(groupOf(r), (counts.get(groupOf(r)) ?? 0) + 1));
+    rows.forEach((r) => counts.set(groupOf(r), (counts.get(groupOf(r)) ?? 0) + 1));
     return [...counts.entries()];
-  }, [read]);
+  }, [rows]);
+  const cancellable = useMemo(() => (plan ? plan.missing.filter((m) => !isReceived(m)) : []), [plan]);
+  const lateChanges = useMemo(() => (plan ? plan.updates.filter((u) => u.orderSensitive.length > 0) : []), [plan]);
 
   async function run() {
     if (!read || !plan) return;
@@ -90,7 +123,7 @@ export default function ImportModal({
       const { source_row, tracker_id, station_name, ...rest } = r;
       return {
         ...rest,
-        discipline: rest.discipline ?? defaultDiscipline,
+        discipline: rest.discipline ?? disciplineFromCategory(rest.category) ?? defaultDiscipline,
         station_id: stationFor(r),
         project_id: projectId,
         created_by: uid,
@@ -118,8 +151,21 @@ export default function ImportModal({
       done += 1;
       if (done % 20 === 0) setProgress(`Updating ${done} / ${plan.updates.length}…`);
     }
+
+    // Parts the new revision dropped: cancelled (never deleted), and only if the user asked and nothing has arrived yet.
+    let cancelled = 0;
+    if (cancelMissing && cancellable.length > 0) {
+      const ids = cancellable.map((m) => m.id);
+      setProgress(`Cancelling ${ids.length} removed parts…`);
+      const { error: err } = await supabase.from("bom_items").update({ status: "cancelled", updated_by: uid }).in("id", ids);
+      if (err) { setError(`Cancel failed: ${err.message}`); setBusy(false); setProgress(null); return; }
+      cancelled = ids.length;
+    }
     setBusy(false); setProgress(null);
-    onDone(`Imported ${file?.name}: ${toInsert.length} added, ${plan.updates.length} updated, ${plan.unchanged} unchanged.`);
+    onDone(
+      `Imported ${file?.name}: ${toInsert.length} added, ${plan.updates.length} updated, ${plan.unchanged} unchanged` +
+        (cancelled ? `, ${cancelled} cancelled (removed from the file)` : "") + "."
+    );
   }
 
   const sel = "field px-2 py-1.5 text-sm w-full";
@@ -135,9 +181,10 @@ export default function ImportModal({
         <div className="p-5 space-y-5 overflow-y-auto text-sm">
           <div className="space-y-2">
             <p className="text-[var(--ink)]/60">
-              Use the company BOM template, a file exported from here, or an older master list — section rows
-              like <span className="font-mono">MH063-120-00 SINGULATOR</span> are read as sub-assemblies.
-              Existing parts are matched and updated; blank cells never erase what&apos;s already in the tracker.
+              Use the company BOM template (v4), a file exported from here, or an older master list. Parts are matched by
+              their <b>Row ID</b>. For parts already here, the engineering columns (description, part no., qty, drawing…)
+              are refreshed from the file; <b>status, supplier, PR/PO, ETA, received and issued</b> are edited in the
+              tracker only and are never overwritten by an import. Blank cells never erase anything.
             </p>
             <input type="file" accept=".xlsx" disabled={busy} onChange={(e) => onPick(e.target.files?.[0] ?? null)} className="text-sm" />
           </div>
@@ -147,12 +194,13 @@ export default function ImportModal({
 
           {read && plan && (
             <>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 {[
                   ["New parts", plan.inserts.length, "var(--accent)"],
                   ["Updates", plan.updates.length, "#4a90d9"],
                   ["Unchanged", plan.unchanged, "var(--ink)"],
-                  ["Skipped rows", read.skipped, read.skipped ? "var(--amber)" : "var(--ink)"],
+                  ["Not in file", plan.missing.length, plan.missing.length ? "var(--amber)" : "var(--ink)"],
+                  ["Skipped rows", read.skipped + (skipUnassigned ? unassigned.length : 0), read.skipped ? "var(--amber)" : "var(--ink)"],
                 ].map(([l, v, c]) => (
                   <div key={l as string} className="rounded-lg bg-[var(--paper)] p-3">
                     <p className="text-xl font-semibold font-mono-num" style={{ color: c as string }}>{v as number}</p>
@@ -162,9 +210,60 @@ export default function ImportModal({
               </div>
               <p className="text-xs text-[var(--ink)]/45">
                 Sheet “{read.sheetName}”, header on row {read.headerRow}.
+                {read.sections > 0 && ` ${read.sections} title/banner row${read.sections === 1 ? "" : "s"} ignored.`}
                 {read.skipped > 0 && " Skipped rows have no description."}
                 {read.unknownHeaders.length > 0 && ` Ignored columns: ${read.unknownHeaders.slice(0, 8).join(", ")}${read.unknownHeaders.length > 8 ? "…" : ""}.`}
               </p>
+
+              {unassigned.length > 0 && (
+                <label className="flex items-start gap-2 rounded-lg bg-[var(--paper)] p-3 text-xs">
+                  <input type="checkbox" className="mt-0.5" checked={skipUnassigned} onChange={(e) => setSkipUnassigned(e.target.checked)} />
+                  <span>
+                    <b>Leave out the {unassigned.length} rows with no Sub-Assembly.</b>{" "}
+                    <span className="text-[var(--ink)]/55">
+                      In the template these are the “UNASSIGNED” leftovers (samples, internals of vendor assemblies…). Tick off
+                      to bring them in anyway; they&apos;ll show as “No station”.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              {plan.ignoredOwned > 0 && (
+                <p className="text-xs text-[var(--ink)]/55 bg-[var(--paper)] rounded-lg p-3">
+                  {plan.ignoredOwned} purchasing/assembly value{plan.ignoredOwned === 1 ? "" : "s"} in the file differ from the tracker and were{" "}
+                  <b>ignored</b> — the tracker is the source for status, supplier, PR/PO, ETA and received/issued.
+                </p>
+              )}
+
+              {lateChanges.length > 0 && (
+                <div className="rounded-lg border border-[var(--amber)]/50 bg-[var(--amber)]/10 p-3 text-xs">
+                  <p className="font-medium mb-1">⚠ {lateChanges.length} change{lateChanges.length === 1 ? "" : "s"} to parts already ordered — tell procurement</p>
+                  <ul className="space-y-0.5 max-h-32 overflow-y-auto">
+                    {lateChanges.slice(0, 60).map((u) => {
+                      const cur = existing.find((e) => e.id === u.id);
+                      return <li key={u.id}><span className="font-medium">{cur?.description}</span> ({cur ? (isReceived(cur) ? "received" : "ordered") : ""}) — {u.orderSensitive.join(", ")}</li>;
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {plan.missing.length > 0 && (
+                <div className="rounded-lg border border-[var(--line)] p-3 text-xs">
+                  <p className="font-medium mb-1">{plan.missing.length} part{plan.missing.length === 1 ? " is" : "s are"} in the tracker but not in this file</p>
+                  <ul className="space-y-0.5 max-h-28 overflow-y-auto text-[var(--ink)]/70">
+                    {plan.missing.slice(0, 60).map((m) => (
+                      <li key={m.id}>
+                        <span className="font-medium">{m.description}</span>
+                        {isOrdered(m) && <span className="text-[var(--amber)]"> — already {isReceived(m) ? "received" : "ordered"}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="flex items-start gap-2 mt-2">
+                    <input type="checkbox" className="mt-0.5" checked={cancelMissing} onChange={(e) => setCancelMissing(e.target.checked)} disabled={cancellable.length === 0} />
+                    <span>Mark these as <b>Cancelled</b> ({cancellable.length}; parts already received are never touched). Nothing is deleted either way.</span>
+                  </label>
+                </div>
+              )}
 
               <div>
                 <h3 className="font-medium mb-1">Link to stations</h3>
@@ -193,9 +292,9 @@ export default function ImportModal({
                 )}
               </div>
 
-              {!read.rows.some((r) => r.discipline) && (
+              {rows.some((r) => !r.discipline && !disciplineFromCategory(r.category)) && (
                 <div>
-                  <label className="block text-xs font-medium text-[var(--ink)]/55 mb-1">This file has no Discipline column. Treat parts as:</label>
+                  <label className="block text-xs font-medium text-[var(--ink)]/55 mb-1">Parts with no Discipline or recognised Category are treated as:</label>
                   <select value={defaultDiscipline} onChange={(e) => setDefaultDiscipline(e.target.value as BomDiscipline)} className={`${sel} max-w-xs`}>
                     {BOM_DISCIPLINES.map((d) => <option key={d} value={d}>{BOM_DISCIPLINE_LABEL[d]}</option>)}
                   </select>
@@ -223,7 +322,7 @@ export default function ImportModal({
             <button onClick={onClose} disabled={busy} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
             <button
               onClick={run}
-              disabled={busy || !plan || plan.inserts.length + plan.updates.length === 0}
+              disabled={busy || !plan || plan.inserts.length + plan.updates.length + (cancelMissing ? cancellable.length : 0) === 0}
               className="btn-primary px-5 py-2 text-sm"
             >
               {busy && read ? "Importing…" : plan ? `Import ${plan.inserts.length + plan.updates.length} rows` : "Import"}

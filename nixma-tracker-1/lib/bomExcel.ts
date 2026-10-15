@@ -47,6 +47,8 @@ export interface ReadResult {
   headerRow: number;
   rows: ParsedBomRow[];
   skipped: number;
+  /** Title / UNASSIGNED banner rows inside the data area (ignored, not errors). */
+  sections: number;
   unknownHeaders: string[];
 }
 
@@ -67,8 +69,8 @@ export async function readBomFile(file: File): Promise<ReadResult> {
     const map = mapHeaders(headers);
     const unknownHeaders = headers.filter((h, i) => h && !map.has(i)) as string[];
     const body = all.slice(hIdx + 1).map((r) => r ?? []);
-    const { rows, skipped } = parseBomRows(body, map, hIdx + 2);
-    return { sheetName: ws.name, headerRow: hIdx + 1, rows, skipped, unknownHeaders };
+    const { rows, skipped, sections } = parseBomRows(body, map, hIdx + 2);
+    return { sheetName: ws.name, headerRow: hIdx + 1, rows, skipped, sections, unknownHeaders };
   }
   throw new Error("Couldn't find a sheet with a 'Description' header row. Use the BOM template.");
 }
@@ -113,6 +115,7 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
 
   const internal: Col[] = [
     { header: "Tracker ID", width: 9, group: "x", get: (i) => i.id },
+    { header: "Row ID", width: 9, group: "x", get: (i) => i.row_id },
     { header: "Item", width: 7, group: "x", get: (_, c) => c.itemNo },
     { header: "Module", width: 22, group: "E", get: (_, c) => c.module?.name ?? "" },
     { header: "Station", width: 26, group: "E", get: (_, c) => c.station?.name ?? "" },
@@ -177,7 +180,7 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
   ws.getCell("A3").value = `Exported ${today.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} from Nixtecs Project Tracker`;
   ws.getCell("A2").font = ws.getCell("A3").font = { name: "Arial", size: 9, italic: true, color: { argb: "FF595959" } };
   if (a.mode === "internal") {
-    ws.getCell("A4").value = "Keep the Tracker ID column when editing and re-importing — it's how rows are matched.";
+    ws.getCell("A4").value = "Keep the Tracker ID and Row ID columns when editing and re-importing — they're how rows are matched.";
     ws.getCell("A4").font = { name: "Arial", size: 9, color: { argb: "FFC00000" } };
   }
 

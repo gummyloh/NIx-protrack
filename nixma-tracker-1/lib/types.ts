@@ -342,6 +342,8 @@ export type BomMakeBuy = 'buy' | 'make' | 'customer';
 
 export interface BomItem {
   id: number;
+  /** Stable per-project key (R0001…); the same value sits in the Excel template's hidden "Row ID" column. */
+  row_id: string;
   project_id: string;
   station_id: number | null;
   sub_assembly: string | null;
