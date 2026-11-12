@@ -8,6 +8,7 @@ import {
   BOM_DISCIPLINE_LABEL,
   BOM_STATUS_LABEL,
   ParsedBomRow,
+  assignRowIds,
   guessStation,
   insertOrder,
   isOrdered,
@@ -141,11 +142,16 @@ export default function ImportModal({
     const fail = (msg: string) => { setError(msg); setBusy(false); setProgress(null); };
 
     // Inserts, in batches.
-    // New parts keep the file's order on screen, after whatever is already here.
-    const sortBase = existing.reduce((m, e) => Math.max(m, e.sort_order ?? 0), 0);
+    // New parts are ordered by their position in the file, so the BOM reads
+    // like the Excel — also when an import is finished off by a second upload.
+    const posKey = (r: ParsedBomRow) => `${r.source_sheet ?? ""}|${r.source_row}`;
+    const position = new Map(rows.map((r, i) => [posKey(r), i + 1]));
     const toInsert = insertOrder(
-      plan.inserts.map((r, i) =>
-        toInsertPayload(r, { projectId, stationId: stationFor(r), defaultDiscipline, userId: uid, sortOrder: sortBase + i + 1 })
+      assignRowIds(
+        plan.inserts.map((r) =>
+          toInsertPayload(r, { projectId, stationId: stationFor(r), defaultDiscipline, userId: uid, sortOrder: position.get(posKey(r)) ?? null })
+        ),
+        existing.map((e) => e.row_id)
       )
     );
     for (let i = 0; i < toInsert.length; i += 200) {

@@ -14,6 +14,7 @@ import {
   readBomSheets,
   toInsertPayload,
   insertOrder,
+  assignRowIds,
   ParsedBomRow,
 } from "./bomImport";
 import { readBomFile } from "./bomExcel";
@@ -546,5 +547,15 @@ describe("insertOrder", () => {
   it("sends rows with their own Row ID before rows the database will number", () => {
     const sent = insertOrder([{ row_id: "R0356", n: 1 }, { row_id: null, n: 2 }, { row_id: "R0357", n: 3 }, { row_id: null, n: 4 }]);
     expect(sent.map((p) => p.n)).toEqual([1, 3, 2, 4]);
+  });
+});
+
+describe("assignRowIds", () => {
+  it("numbers parts without a Row ID after the highest in the tracker or the file", () => {
+    const out = assignRowIds([{ row_id: "R0356" }, { row_id: null }, { row_id: "R0449" }, { row_id: null }], ["R0010", "R0400", null]);
+    expect(out.map((p) => p.row_id)).toEqual(["R0356", "R0450", "R0449", "R0451"]);
+  });
+  it("continues after the tracker when that is higher", () => {
+    expect(assignRowIds([{ row_id: null }], ["R0627"]).map((p) => p.row_id)).toEqual(["R0628"]);
   });
 });

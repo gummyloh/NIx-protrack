@@ -997,6 +997,21 @@ export function insertOrder<T extends { row_id?: unknown }>(payloads: T[]): T[] 
   return [...payloads.filter((p) => p.row_id), ...payloads.filter((p) => !p.row_id)];
 }
 
+/**
+ * Gives every new part without a Row ID the next free R####, continuing after
+ * the highest number in the tracker or the file. Done here rather than left
+ * to the database: its numbering rule re-reads the whole project's BOM for
+ * every row, which timed out on a 150-row batch.
+ */
+export function assignRowIds<T extends { row_id?: unknown }>(payloads: T[], existingRowIds: (string | null | undefined)[]): T[] {
+  const num = (v: unknown) => {
+    const m = typeof v === "string" ? v.trim().match(/^R(\d+)$/i) : null;
+    return m ? Number(m[1]) : 0;
+  };
+  let n = Math.max(0, ...existingRowIds.map(num), ...payloads.map((p) => num(p.row_id)));
+  return payloads.map((p) => (p.row_id ? p : { ...p, row_id: `R${String(++n).padStart(4, "0")}` }));
+}
+
 /** Best-guess station for a sub-assembly name, by shared words. */
 export function guessStation(subAssembly: string, stations: StationRow[]): number | null {
   const words = (s: string) =>
