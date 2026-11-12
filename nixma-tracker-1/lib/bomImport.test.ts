@@ -12,6 +12,8 @@ import {
   normalizeUnit,
   planImport,
   readBomSheets,
+  toInsertPayload,
+  insertOrder,
   ParsedBomRow,
 } from "./bomImport";
 import { readBomFile } from "./bomExcel";
@@ -515,5 +517,34 @@ describe("readBomFile on real workbooks", () => {
     const wb = new ExcelJS.Workbook();
     wb.addWorksheet("Notes").addRow(["nothing here"]);
     await expect(readBomFile(await toFile(wb))).rejects.toThrow(/“Notes”/);
+  });
+});
+
+describe("toInsertPayload", () => {
+  const ctx = { projectId: "p", stationId: null, defaultDiscipline: "mechanical" as const, userId: null };
+  it("every new row has the same columns and no blank in a required one", () => {
+    const bare = toInsertPayload({ source_row: 14, description: "Magnet", source_sheet: "BOM", discipline_hint: "pneumatic" }, ctx);
+    const full = toInsertPayload(
+      { source_row: 15, description: "Handle", row_id: "R0005", make_buy: "stock", unit: "Set", multiple: 2, status: "received", qty: 3, eta: "2026-10-31", tracker_id: 9, station_name: "x" },
+      ctx
+    );
+    expect(Object.keys(bare).sort()).toEqual(Object.keys(full).sort());
+    expect(bare).toMatchObject({ make_buy: "buy", unit: "Pcs", multiple: 1, status: "not_finalized", discipline: "pneumatic", row_id: null, qty: null });
+    expect(full).toMatchObject({ make_buy: "stock", unit: "Set", multiple: 2, status: "received", row_id: "R0005", eta: "2026-10-31" });
+    for (const k of ["source_row", "source_sheet", "tracker_id", "station_name", "discipline_hint", "unit_price", "total_qty", "id"]) {
+      expect(bare).not.toHaveProperty(k);
+      expect(full).not.toHaveProperty(k);
+    }
+  });
+  it("rejects impossible dates instead of sending them to the database", () => {
+    expect(parseDate("31/02/2026")).toBeNull();
+    expect(parseDate("29/02/2028")).toBe("2028-02-29");
+  });
+});
+
+describe("insertOrder", () => {
+  it("sends rows with their own Row ID before rows the database will number", () => {
+    const sent = insertOrder([{ row_id: "R0356", n: 1 }, { row_id: null, n: 2 }, { row_id: "R0357", n: 3 }, { row_id: null, n: 4 }]);
+    expect(sent.map((p) => p.n)).toEqual([1, 3, 2, 4]);
   });
 });

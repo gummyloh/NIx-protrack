@@ -9,9 +9,11 @@ import {
   BOM_STATUS_LABEL,
   ParsedBomRow,
   guessStation,
+  insertOrder,
   isOrdered,
   planImport,
   subAssyKey,
+  toInsertPayload,
 } from "@/lib/bom";
 import { readBomFile, ReadResult } from "@/lib/bomExcel";
 
@@ -139,18 +141,13 @@ export default function ImportModal({
     const fail = (msg: string) => { setError(msg); setBusy(false); setProgress(null); };
 
     // Inserts, in batches.
-    const toInsert = plan.inserts.map((r) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { source_row, source_sheet, tracker_id, station_name, discipline_hint, ...rest } = r;
-      return {
-        ...rest,
-        discipline: rest.discipline ?? discipline_hint ?? defaultDiscipline,
-        station_id: stationFor(r),
-        project_id: projectId,
-        created_by: uid,
-        updated_by: uid,
-      };
-    });
+    // New parts keep the file's order on screen, after whatever is already here.
+    const sortBase = existing.reduce((m, e) => Math.max(m, e.sort_order ?? 0), 0);
+    const toInsert = insertOrder(
+      plan.inserts.map((r, i) =>
+        toInsertPayload(r, { projectId, stationId: stationFor(r), defaultDiscipline, userId: uid, sortOrder: sortBase + i + 1 })
+      )
+    );
     for (let i = 0; i < toInsert.length; i += 200) {
       setProgress(`Adding ${Math.min(i + 200, toInsert.length)} / ${toInsert.length}…`);
       const { error: err } = await supabase.from("bom_items").insert(toInsert.slice(i, i + 200));
