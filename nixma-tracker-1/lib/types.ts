@@ -338,10 +338,12 @@ export type BomStatus =
   | 'not_finalized' | 'finalized' | 'purchased' | 'received'
   | 'nsw_purchased' | 'nsw_requested' | 'cancelled';
 export type BomDiscipline = 'mechanical' | 'electrical' | 'pneumatic' | 'software' | 'others';
-export type BomMakeBuy = 'buy' | 'make' | 'customer';
+export type BomMakeBuy = 'buy' | 'make' | 'customer' | 'stock';
 
 export interface BomItem {
   id: number;
+  /** Stable per-project key (R0001…); the same value sits in the Excel template's "Row ID" column. Assigned by the database when blank; never changes. */
+  row_id: string;
   project_id: string;
   station_id: number | null;
   sub_assembly: string | null;

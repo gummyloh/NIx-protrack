@@ -9,9 +9,8 @@ import {
   BOM_STATUS_LABEL,
   CLIENT_STATUS_LABEL,
   bomFlags,
-  mapHeaders,
-  parseBomRows,
-  ParsedBomRow,
+  readBomSheets,
+  SheetRead,
   toClientStatus,
 } from "./bom";
 
@@ -25,10 +24,12 @@ function cellValue(v: unknown): unknown {
   if (v == null) return null;
   if (typeof v === "object" && !(v instanceof Date)) {
     const o = v as Record<string, unknown>;
-    if ("result" in o) return o.result ?? null; // formula
+    if ("error" in o) return null; // #N/A, #REF! …
+    if ("result" in o) return cellValue(o.result); // formula (result may itself be an error)
+    if ("formula" in o || "sharedFormula" in o) return null; // formula never calculated
     if ("richText" in o) return (o.richText as { text: string }[]).map((t) => t.text).join("");
-    if ("text" in o) return o.text; // hyperlink
-    if ("error" in o) return null;
+    if ("text" in o) return cellValue(o.text); // hyperlink
+    return null;
   }
   return v;
 }
@@ -37,40 +38,46 @@ function sheetRows(ws: Worksheet): unknown[][] {
   const rows: unknown[][] = [];
   ws.eachRow({ includeEmpty: true }, (row, n) => {
     const vals = row.values as unknown[]; // 1-based
-    rows[n - 1] = vals.slice(1).map(cellValue);
+    rows[n - 1] = Array.from(vals.slice(1), cellValue);
   });
-  return rows;
+  return Array.from(rows, (r) => r ?? []);
 }
 
 export interface ReadResult {
-  sheetName: string;
-  headerRow: number;
-  rows: ParsedBomRow[];
-  skipped: number;
-  unknownHeaders: string[];
+  /** Every sheet that looks like a BOM; `included` says which are ticked by default. */
+  sheets: SheetRead[];
 }
 
-/** Reads a BOM workbook: the "BOM" sheet if present, else the first sheet with a Description header. */
+/**
+ * Reads a BOM workbook. All the judgement (which sheets, where the header
+ * is, what each cell means) is in bomImport.ts so it can be tested without
+ * a browser; this only gets the cells out of the file.
+ */
 export async function readBomFile(file: File): Promise<ReadResult> {
+  const ext = file.name.toLowerCase().split(".").pop();
+  if (ext === "xls") {
+    throw new Error("This is an old-format .xls file. Open it in Excel, choose File → Save As → Excel Workbook (.xlsx), and upload that.");
+  }
+  if (ext === "csv") {
+    throw new Error("CSV files can't be imported. Open it in Excel, save as Excel Workbook (.xlsx), and upload that.");
+  }
   const ExcelJS = await loadExcel();
   const wb: Workbook = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
-
-  const sheets = [...wb.worksheets].sort((a, b) => (a.name === "BOM" ? -1 : b.name === "BOM" ? 1 : 0));
-  for (const ws of sheets) {
-    const all = sheetRows(ws);
-    const hIdx = all.slice(0, 25).findIndex(
-      (r) => r && r.some((c) => typeof c === "string" && c.trim().toLowerCase() === "description")
-    );
-    if (hIdx < 0) continue;
-    const headers = (all[hIdx] || []).map((c) => (c == null ? null : String(c)));
-    const map = mapHeaders(headers);
-    const unknownHeaders = headers.filter((h, i) => h && !map.has(i)) as string[];
-    const body = all.slice(hIdx + 1).map((r) => r ?? []);
-    const { rows, skipped } = parseBomRows(body, map, hIdx + 2);
-    return { sheetName: ws.name, headerRow: hIdx + 1, rows, skipped, unknownHeaders };
+  try {
+    await wb.xlsx.load(await file.arrayBuffer());
+  } catch {
+    throw new Error("Couldn't open this file. If it's password-protected or still open in Excel, remove the password / close it and try again.");
   }
-  throw new Error("Couldn't find a sheet with a 'Description' header row. Use the BOM template.");
+  const sheets = readBomSheets(
+    wb.worksheets.map((ws) => ({ name: ws.name, rows: sheetRows(ws), hidden: ws.state !== "visible" }))
+  );
+  if (sheets.length === 0) {
+    const names = wb.worksheets.map((w) => `“${w.name}”`).join(", ");
+    throw new Error(
+      `Couldn't find a parts list in this file (looked in ${names}). A sheet needs a header row with a Description column plus Part No. or Qty.`
+    );
+  }
+  return { sheets };
 }
 
 // ─── Export ───────────────────────────────────────────────────────────
@@ -113,6 +120,7 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
 
   const internal: Col[] = [
     { header: "Tracker ID", width: 9, group: "x", get: (i) => i.id },
+    { header: "Row ID", width: 9, group: "x", get: (i) => i.row_id },
     { header: "Item", width: 7, group: "x", get: (_, c) => c.itemNo },
     { header: "Module", width: 22, group: "E", get: (_, c) => c.module?.name ?? "" },
     { header: "Station", width: 26, group: "E", get: (_, c) => c.station?.name ?? "" },
@@ -177,7 +185,7 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
   ws.getCell("A3").value = `Exported ${today.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} from Nixtecs Project Tracker`;
   ws.getCell("A2").font = ws.getCell("A3").font = { name: "Arial", size: 9, italic: true, color: { argb: "FF595959" } };
   if (a.mode === "internal") {
-    ws.getCell("A4").value = "Keep the Tracker ID column when editing and re-importing — it's how rows are matched.";
+    ws.getCell("A4").value = "Keep the Tracker ID and Row ID columns when editing and re-importing — they're how rows are matched.";
     ws.getCell("A4").font = { name: "Arial", size: 9, color: { argb: "FFC00000" } };
   }
 
