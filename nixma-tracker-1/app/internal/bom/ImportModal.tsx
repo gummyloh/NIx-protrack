@@ -11,6 +11,7 @@ import {
   guessStation,
   isOrdered,
   planImport,
+  subAssyKey,
 } from "@/lib/bom";
 import { readBomFile, ReadResult } from "@/lib/bomExcel";
 
@@ -75,10 +76,18 @@ export default function ImportModal({
       res.sheets.forEach((s) => s.rows.forEach((r) => delete r.unit_price));
       setRead(res);
       setUseSheet(Object.fromEntries(res.sheets.map((s) => [s.name, s.included])));
+      // Bare drawing codes ("MH063-120-00") say nothing a name guess can use,
+      // but parts already in the tracker under that code know their station.
+      const stationByCode = new Map<string, number>();
+      for (const e of existing) {
+        if (e.station_id != null && e.sub_assembly && !stationByCode.has(subAssyKey(e.sub_assembly))) {
+          stationByCode.set(subAssyKey(e.sub_assembly), e.station_id);
+        }
+      }
       const init: Record<string, string> = {};
       for (const g of new Set(res.sheets.flatMap((s) => s.rows.map(groupOf)))) {
         const exact = stationByName.get(g.toLowerCase());
-        const guess = exact ?? guessStation(g, stations);
+        const guess = exact ?? stationByCode.get(subAssyKey(g)) ?? guessStation(g, stations);
         init[g] = guess != null ? String(guess) : NONE;
       }
       setMapping(init);
@@ -113,6 +122,7 @@ export default function ImportModal({
   const missingOrdered = useMemo(() => (plan ? plan.missing.filter((m) => isOrdered(m)) : []), [plan]);
   const toCancel = cancelMissing ? missingOpen : [];
   const needsDiscipline = rows.some((r) => !r.discipline && !r.discipline_hint);
+  const orderSensitive = useMemo(() => (plan ? plan.updates.filter((u) => u.orderSensitive.length > 0) : []), [plan]);
 
   async function run() {
     if (!read || !plan) return;
@@ -327,6 +337,35 @@ export default function ImportModal({
                     {plan.updates.length > 100 && <li className="text-[var(--ink)]/45">…and {plan.updates.length - 100} more</li>}
                   </ul>
                 </details>
+              )}
+
+              {orderSensitive.length > 0 && (
+                <details className="text-xs rounded-lg border border-[var(--amber)]/40 p-2.5" open>
+                  <summary className="cursor-pointer font-medium">
+                    {orderSensitive.length} part{orderSensitive.length === 1 ? "" : "s"} already ordered or received will change — tell purchasing
+                  </summary>
+                  <ul className="mt-1.5 space-y-0.5 max-h-32 overflow-y-auto">
+                    {orderSensitive.slice(0, 100).map((u) => {
+                      const cur = byId.get(u.id) as unknown as Record<string, unknown> | undefined;
+                      return (
+                        <li key={u.id}>
+                          <span className="font-medium">{String(cur?.description ?? "")}</span>
+                          {cur?.po_no ? ` (${cur.po_no})` : ""} —{" "}
+                          {u.orderSensitive.map((k) => `${fieldName(k)}: ${cur?.[k] ?? "blank"} → ${show(k, (u.patch as Record<string, unknown>)[k])}`).join("; ")}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
+              )}
+
+              {plan.rowIds === "mismatch" && (
+                <p className="text-xs rounded-lg bg-[var(--paper)] p-2.5">
+                  The Row IDs in this file don&apos;t line up with the ones in the tracker — the parts here were numbered
+                  before this file existed. Parts are matched by sub-assembly and part no. instead
+                  {plan.rowIdClashes > 0 && `, and ${plan.rowIdClashes} new part${plan.rowIdClashes === 1 ? "" : "s"} will get a new Row ID`}.
+                  <span className="text-[var(--ink)]/50"> Removing the old starter parts first avoids this.</span>
+                </p>
               )}
 
               {plan.rematched.length > 0 && (

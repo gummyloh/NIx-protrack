@@ -15,6 +15,7 @@ import {
 
 function item(o: Partial<BomItem> & { id: number }): BomItem {
   return {
+    row_id: `R${String(o.id).padStart(4, "0")}`,
     project_id: "p",
     station_id: 1,
     sub_assembly: "120 SINGULATOR",

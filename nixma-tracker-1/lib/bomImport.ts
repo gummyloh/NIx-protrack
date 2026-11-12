@@ -1,5 +1,7 @@
 import { BomItem, BomStatus, BomDiscipline, BomMakeBuy, StationRow } from "./types";
 
+const ORDERED_STATUSES: BomStatus[] = ["purchased", "received", "nsw_purchased"];
+
 // ─── Excel import: header mapping ─────────────────────────────────────
 // Header names accepted from the company template, from files exported
 // out of the tracker, and from older master lists engineers copy forward
@@ -7,7 +9,7 @@ import { BomItem, BomStatus, BomDiscipline, BomMakeBuy, StationRow } from "./typ
 
 export type BomField = keyof Pick<
   BomItem,
-  | "sub_assembly" | "discipline" | "description" | "part_no" | "manufacturer" | "category"
+  | "row_id" | "sub_assembly" | "discipline" | "description" | "part_no" | "manufacturer" | "category"
   | "qty" | "multiple" | "unit" | "make_buy" | "drawing_no" | "nsw_part_no" | "engineer_pic"
   | "issue_date" | "required_date" | "status" | "supplier" | "pr_no" | "po_no" | "po_date"
   | "eta" | "do_invoice_no" | "qty_received" | "received_date" | "unit_price"
@@ -18,6 +20,7 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const ALIAS_GROUPS: [BomField, string[]][] = [
   ["tracker_id", ["trackerid"]],
+  ["row_id", ["rowid"]],
   ["station_name", ["station", "stationname"]],
   ["sub_assembly", ["subassembly", "subassy", "subassemblyname", "subassyname"]],
   ["discipline", ["discipline"]],
@@ -128,6 +131,18 @@ export function parseDiscipline(v: string | null | undefined): BomDiscipline | n
   return null;
 }
 
+/** The company template has no Discipline column; infer it from Category so the BOM page's filter still works. */
+export function disciplineFromCategory(category: string | null | undefined): BomDiscipline | null {
+  if (!category) return null;
+  const n = norm(category);
+  if (n.startsWith("electr") || n === "sensor") return "electrical";
+  if (n.startsWith("pneu") || n.startsWith("vacuum")) return "pneumatic";
+  if (n.startsWith("vision") || n.startsWith("soft")) return "software";
+  if (n.startsWith("fabricated") || n.startsWith("stdmech") || n.startsWith("motion") || n.startsWith("safety")) return "mechanical";
+  if (n.startsWith("consumable")) return "others";
+  return null;
+}
+
 export function parseMakeBuy(v: string | null | undefined): BomMakeBuy | null {
   if (!v) return null;
   const n = norm(v);
@@ -162,7 +177,8 @@ export function parseDate(v: unknown): string | null {
   if (v == null || v === "") return null;
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10); // exceljs: UTC midnight
   if (typeof v === "number") return fromSerial(v);
-  const s = String(v).trim();
+  // Purchasing writes promised dates in brackets: "(31/10/2026)".
+  const s = String(v).trim().replace(/^[([]\s*(.*?)\s*[)\]]$/, "$1");
   let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (m) return ymd(Number(m[1]), Number(m[2]), Number(m[3]));
   m = s.match(/^(\d{1,2})[-\s/.,]+([A-Za-z]{3})[A-Za-z]*[-\s/.,]+(\d{2,4})$/);
@@ -211,7 +227,7 @@ export type ParsedBomRow = Partial<Omit<BomItem, "id" | "project_id" | "station_
   source_row: number;
   /** Sheet the row came from, when the workbook has more than one BOM sheet. */
   source_sheet?: string;
-  /** Discipline implied by the sheet name ("Mech BOM"); used only when the row has none. */
+  /** Discipline implied by the part's Category, else by the sheet name ("Mech BOM"); used only when the row has none. */
   discipline_hint?: BomDiscipline;
 };
 
@@ -231,7 +247,12 @@ export interface ImportIssue {
 const SECTION_RE = /^[A-Z]{1,4}\d{2,4}(-[0-9A-Z]{1,4})+(\s|$)/;
 const NUMBERED_SECTION_RE = /^\d{2,4}[\s.\-:]+[A-Za-z]/;
 const TOTAL_RE = /^(sub[\s-]?total|grand\s*total|total)\b/i;
+// The template keeps an "UNASSIGNED" banner row in the data area.
+const BANNER_RE = /^unassigned\b/i;
 
+const PLACEHOLDER_FIELDS = new Set<BomField>([
+  "tracker_id", "row_id", "total_qty_in", "sub_assembly", "station_name", "discipline", "category", "unit", "make_buy", "multiple", "status",
+]);
 const DATE_FIELDS = ["issue_date", "required_date", "po_date", "eta", "received_date", "issued_date"] as const;
 const FIELD_LABEL: Partial<Record<BomField, string>> = {
   qty: "Qty", multiple: "Multiple", qty_received: "Qty Received", qty_issued: "Qty Issued",
@@ -240,6 +261,37 @@ const FIELD_LABEL: Partial<Record<BomField, string>> = {
 };
 /** Placeholders people type into date/qty cells that mean "nothing yet" — not worth a warning. */
 const BLANKISH_RE = /^(-+|n\/?a|nil|none|tbc|tbd|tba|\?+|pending)$/i;
+
+/**
+ * Excel on a PC set to US dates reads a typed "5/11/26" as 11 May, and leaves
+ * "30/10/26" as text because there is no month 30. So a column typed
+ * day-first ends up half text (correct) and half real dates with day and
+ * month swapped. Detects that: every real date has day ≤ 12, and swapping
+ * brings each one closer to the dates that stayed as text.
+ */
+function swappedDateColumn(values: unknown[]): boolean {
+  const text: number[] = [];
+  const cells: Date[] = [];
+  for (const v of values) {
+    if (v instanceof Date && !isNaN(v.getTime())) cells.push(v);
+    else if (typeof v === "string") {
+      const d = parseDate(v);
+      if (d) text.push(Date.parse(d));
+    }
+  }
+  if (!text.length || !cells.length) return false;
+  text.sort((a, b) => a - b);
+  const mid = text[Math.floor(text.length / 2)];
+  return cells.every((c) => {
+    const d = c.getUTCDate(), m = c.getUTCMonth() + 1;
+    if (d > 12) return false;
+    if (d === m) return true;
+    const sw = Date.UTC(c.getUTCFullYear(), d - 1, m);
+    return Math.abs(sw - mid) < Math.abs(c.getTime() - mid);
+  }) && cells.some((c) => c.getUTCDate() !== c.getUTCMonth() + 1);
+}
+const swapDayMonth = (c: Date) => new Date(Date.UTC(c.getUTCFullYear(), c.getUTCDate() - 1, c.getUTCMonth() + 1));
+const nice = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 const clip = (s: string, n = 40) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
@@ -272,15 +324,32 @@ export function parseBomRows(
   for (const [i, f] of headerMap) colOf.set(f, i);
   const explicitSubAssy: boolean[] = [];
 
+  // Cells that couldn't be read, grouped so 30 rows with the same comment in
+  // the ETA column come out as one line, not 30.
+  const unreadCells = new Map<string, { label: string; text: string; what: string; rows: number[]; desc: string }>();
+  const swapped = new Map<BomField, { n: number; example?: string }>();
+  for (const f of DATE_FIELDS) {
+    if (colOf.has(f) && swappedDateColumn(cells.map((r) => r?.[colOf.get(f)!]))) swapped.set(f, { n: 0 });
+  }
+  let nameFromPartNo = 0;
+  let etaNotes = 0;
+  let etaNoteExample = "";
+
   cells.forEach((row, idx) => {
     const rowNo = firstRowNumber + idx;
     const issue = (kind: ImportIssue["kind"], message: string) => issues.push({ sheet, row: rowNo, kind, message });
     const get = (f: BomField) => (colOf.has(f) ? row[colOf.get(f)!] : undefined);
-    const desc = parseText(get("description"));
+    let desc = parseText(get("description"));
     const pn = parseText(get("part_no"));
     const qty = parseNum(get("qty"));
     const mfr = parseText(get("manufacturer"));
 
+    // Fabricated parts are often listed by drawing number alone, in the
+    // Part No. column. That's a real part: use the number as its name.
+    if (!desc && pn) {
+      desc = pn;
+      nameFromPartNo += 1;
+    }
     if (!desc) {
       // A lone label on the row ("120 SINGULATOR" typed in the Item column)
       // is a section title in lists without a Sub-Assembly column.
@@ -291,8 +360,10 @@ export function parseBomRows(
       }
       // Only rows with real data in a known column count as skipped — the
       // template's pre-filled formula rows and stray notes don't.
+      // (a row with only its Sub-Assembly / Category / Unit dropdowns picked
+      // is a placeholder someone hasn't filled in yet, not a lost part).
       const lost = [...headerMap]
-        .filter(([, f]) => f !== "tracker_id" && f !== "total_qty_in")
+        .filter(([, f]) => !PLACEHOLDER_FIELDS.has(f))
         .map(([i]) => parseText(row[i]))
         .filter(Boolean) as string[];
       if (lost.length) {
@@ -302,6 +373,7 @@ export function parseBomRows(
       return;
     }
     if (TOTAL_RE.test(desc) && !pn) return; // subtotal lines aren't parts
+    if (BANNER_RE.test(desc) && !pn && qty == null) return; // nor is the template's UNASSIGNED banner
     if (!hasSubAssyCol && !pn && qty == null && !mfr && (SECTION_RE.test(desc) || NUMBERED_SECTION_RE.test(desc))) {
       section = desc;
       return;
@@ -310,11 +382,17 @@ export function parseBomRows(
     const out: ParsedBomRow = { description: desc, source_row: rowNo };
     if (sheet) out.source_sheet = sheet;
     let totalIn: number | null = null;
+    let etaNote: string | null = null;
     for (const [i, field] of headerMap) {
       const raw = row[i];
-      const text = parseText(raw);
+      // A date typed into the wrong column should read as a date in the warning.
+      const text = raw instanceof Date && !isNaN(raw.getTime()) ? nice(raw.toISOString().slice(0, 10)) : parseText(raw);
       const unread = (what: string) => {
-        if (text && !BLANKISH_RE.test(text)) issue("value", `${FIELD_LABEL[field] ?? field} “${clip(text)}” ${what} — ${clip(desc, 30)}`);
+        if (!text || BLANKISH_RE.test(text)) return;
+        const key = `${field}|${text.toLowerCase()}`;
+        const g = unreadCells.get(key);
+        if (g) g.rows.push(rowNo);
+        else unreadCells.set(key, { label: FIELD_LABEL[field] ?? field, text, what, rows: [rowNo], desc: desc! });
       };
       switch (field) {
         case "tracker_id": {
@@ -323,6 +401,9 @@ export function parseBomRows(
           break;
         }
         case "description":
+          break;
+        case "row_id":
+          if (text) out.row_id = text.toUpperCase();
           break;
         case "total_qty_in":
           totalIn = parseNum(raw);
@@ -340,9 +421,20 @@ export function parseBomRows(
         }
         case "issue_date": case "required_date": case "po_date": case "eta":
         case "received_date": case "issued_date": {
+          const sw = swapped.get(field);
+          if (sw && raw instanceof Date && raw.getUTCDate() !== raw.getUTCMonth() + 1) {
+            out[field] = swapDayMonth(raw).toISOString().slice(0, 10);
+            sw.n += 1;
+            sw.example ??= `${nice(raw.toISOString().slice(0, 10))} → ${nice(out[field]!)}`;
+            break;
+          }
           const d = parseDate(raw);
           if (d) out[field] = d;
-          else unread("isn't a date, left blank");
+          else if (field === "eta" && text && !BLANKISH_RE.test(text)) {
+            // Purchasing's running comment ("15/10: 4 to 6 weeks…") lives in
+            // the ETA column until there's a date. Keep it — in Remarks.
+            etaNote = text;
+          } else unread("isn't a date, left blank");
           break;
         }
         case "status": {
@@ -374,11 +466,48 @@ export function parseBomRows(
       const mult = out.multiple && out.multiple > 0 ? out.multiple : 1;
       out.qty = totalIn / mult;
     }
+    if (!out.discipline) {
+      const d = disciplineFromCategory(out.category);
+      if (d) out.discipline_hint = d;
+    }
+    if (etaNote) {
+      const tag = `ETA: ${etaNote}`;
+      if (!out.remarks?.includes(etaNote)) out.remarks = out.remarks ? `${out.remarks} · ${tag}` : tag;
+      etaNotes += 1;
+      etaNoteExample ||= etaNote;
+    }
     explicitSubAssy.push(!!out.sub_assembly);
     if (!out.sub_assembly && section) out.sub_assembly = section;
     if (out.unit) out.unit = normalizeUnit(out.unit);
     rows.push(out);
   });
+
+  const at = rows[0]?.source_row ?? firstRowNumber;
+  for (const g of unreadCells.values()) {
+    const where = g.rows.length === 1 ? clip(g.desc, 30) : `${g.rows.length} rows (${g.rows.slice(0, 4).join(", ")}${g.rows.length > 4 ? "…" : ""})`;
+    issues.push({ sheet, row: g.rows[0], kind: "value", message: `${g.label} “${clip(g.text)}” ${g.what} — ${where}` });
+  }
+  issues.sort((a, b) => a.row - b.row);
+  for (const [f, sw] of swapped) {
+    if (sw.n) {
+      issues.push({
+        sheet, row: at, kind: "note",
+        message: `${sw.n} ${FIELD_LABEL[f] ?? f} dates were stored by Excel with day and month swapped and have been corrected (${sw.example})`,
+      });
+    }
+  }
+  if (etaNotes) {
+    issues.push({
+      sheet, row: at, kind: "note",
+      message: `${etaNotes} ETA cells hold a comment, not a date (“${clip(etaNoteExample, 45)}”) — kept in Remarks, ETA left blank`,
+    });
+  }
+  if (nameFromPartNo) {
+    issues.push({
+      sheet, row: at, kind: "note",
+      message: `${nameFromPartNo} rows have no Description — the Part No. is used as the name`,
+    });
+  }
 
   // Fill-down: the Sub-Assembly column is written once per group and left
   // blank underneath. Only when the sheet clearly works that way (each label
@@ -483,6 +612,18 @@ export interface SheetRead {
 const DERIVED_SHEET_RE = /customer|summary|progress|dashboard|how\s*to|\blists?\b|revision|\blog\b|legend|cover|pivot|template|sample|example|old|backup|copy/i;
 const IGNORED_HEADER_RE = /^(item|items?\s*no\.?|no\.?|s\/?n|#|flags?|module|total)$/i;
 
+/**
+ * Sub-assemblies are identified by their drawing code. "MH063-110-00" in one
+ * revision of the list and "MH063-110-00 BASE & STRUCTURE" in another are the
+ * same sub-assembly.
+ */
+const SA_CODE_RE = /^[A-Za-z]{1,4}\d{2,4}(-[0-9A-Za-z]{1,4})+/;
+export function subAssyKey(s: string | null | undefined): string {
+  const t = (s ?? "").trim();
+  const m = t.match(SA_CODE_RE);
+  return norm(m ? m[0] : t);
+}
+
 function sheetDiscipline(name: string): BomDiscipline | null {
   const n = norm(name);
   if (n.includes("mech")) return "mechanical";
@@ -512,7 +653,7 @@ export function readBomSheets(sheets: RawSheet[]): SheetRead[] {
     // sheet — so a blank template doesn't fall through to its example row.
     if (rows.length === 0 && norm(sh.name) !== "bom") continue;
     const disciplineHint = sheetDiscipline(sh.name);
-    if (disciplineHint) rows.forEach((r) => { if (!r.discipline) r.discipline_hint = disciplineHint; });
+    if (disciplineHint) rows.forEach((r) => { if (!r.discipline && !r.discipline_hint) r.discipline_hint = disciplineHint; });
     const unknownHeaders = hit.headers
       .filter((h, i): h is string => !!h && !hit.map.has(i) && !IGNORED_HEADER_RE.test(h.trim()))
       .map((h) => h.replace(/\s+/g, " ").trim());
@@ -536,9 +677,9 @@ export function readBomSheets(sheets: RawSheet[]): SheetRead[] {
 
 // ─── Import planning ──────────────────────────────────────────────────
 
-/** Identity used to match a re-imported row to an existing tracker row. */
+/** Identity used to match a re-imported row when the Row ID can't be used (older lists, or a first upload). */
 export function matchKey(r: { sub_assembly?: string | null; part_no?: string | null; description?: string | null }): string {
-  const sa = norm(r.sub_assembly ?? "");
+  const sa = subAssyKey(r.sub_assembly);
   return r.part_no?.trim() ? `${sa}|pn:${norm(r.part_no)}` : `${sa}|d:${norm(r.description ?? "")}`;
 }
 
@@ -554,9 +695,25 @@ export const PROTECTED_FIELDS = [
 ] as const;
 const PROTECTED = new Set<string>(PROTECTED_FIELDS);
 
+/** Engineering edits that matter once a part has been ordered — shown as a warning in the import preview. */
+export const ORDER_SENSITIVE_FIELDS = ["description", "part_no", "manufacturer", "qty", "multiple", "unit", "make_buy", "drawing_no"] as const;
+const ORDER_SENSITIVE = new Set<string>(ORDER_SENSITIVE_FIELDS);
+
 const STATUS_RANK: Record<BomStatus, number> = {
   not_finalized: 0, finalized: 1, nsw_requested: 1, purchased: 2, received: 3, nsw_purchased: 3, cancelled: 9,
 };
+
+/**
+ * Whether a re-uploaded file may change the Status of a part the tracker
+ * already has: it can move it forward (release a design, record an order or a
+ * receipt) and cancel a part nobody has ordered. It can never move it back,
+ * revive a cancelled part, or cancel something already on order.
+ */
+export function fileMayChangeStatus(current: BomStatus, fromFile: BomStatus): boolean {
+  if (current === fromFile || current === "cancelled") return false;
+  if (fromFile === "cancelled") return !ORDERED_STATUSES.includes(current);
+  return STATUS_RANK[fromFile] > STATUS_RANK[current];
+}
 
 export interface KeptValue {
   id: number;
@@ -566,18 +723,37 @@ export interface KeptValue {
   row: ParsedBomRow;
 }
 
+export interface ImportUpdate {
+  id: number;
+  patch: Partial<BomItem>;
+  changed: string[];
+  row: ParsedBomRow;
+  /** Engineering edits to a part that has already been ordered or received — purchasing should look. */
+  orderSensitive: string[];
+}
+
 export interface ImportPlan {
+  /** Rows to create. A row_id is only left on a row when it's free to use in this project. */
   inserts: ParsedBomRow[];
-  updates: { id: number; patch: Partial<BomItem>; changed: string[]; row: ParsedBomRow }[];
+  updates: ImportUpdate[];
   unchanged: number;
   /** File values ignored because the tracker already holds a newer purchasing/assembly value. */
   kept: KeptValue[];
-  /** Rows matched by something other than the exact key — worth showing so nobody is surprised. */
+  /** Rows matched by something other than Row ID or the exact key — worth showing so nobody is surprised. */
   rematched: { id: number; row: ParsedBomRow; how: "part_no_changed" | "moved" }[];
   /** Tracker parts in the sub-assemblies this file covers that the file no longer lists. */
   missing: BomItem[];
   /** The same part listed more than once under one sub-assembly in the file. */
   duplicates: { label: string; rows: number[] }[];
+  /**
+   * How the file's Row IDs were used. "trusted": they line up with the tracker
+   * and rows were matched on them. "mismatch": the tracker's Row IDs belong to
+   * different parts (numbered before this file existed), so parts were matched
+   * by sub-assembly + part no. instead. "none": nothing to compare.
+   */
+  rowIds: "trusted" | "mismatch" | "none";
+  /** Rows whose file Row ID couldn't be kept because another part in the tracker already holds it. */
+  rowIdClashes: number;
 }
 
 export interface ImportOptions {
@@ -589,18 +765,28 @@ export interface ImportOptions {
 
 const sameValue = (cur: unknown, v: unknown) => (typeof v === "number" ? cur != null && Number(cur) === v : cur === v);
 const isBlank = (v: unknown) => v == null || v === "";
+const NEVER_PATCHED = new Set<string>([...ROW_META_KEYS, "row_id", "unit_price"]);
+
+/** Same part, judged loosely: used to check a Row ID match isn't a coincidence of numbering. */
+const looksLikeSamePart = (row: ParsedBomRow, e: BomItem) =>
+  (!!row.part_no?.trim() && !!e.part_no?.trim() && norm(row.part_no) === norm(e.part_no)) ||
+  (!!row.description && norm(row.description) === norm(e.description));
 
 /**
  * Plans an import without touching the database.
  *
  * Matching, in order:
+ *  0. Row ID (the template's own column) — but only once the file's
+ *     numbering is seen to agree with the tracker's. A tracker BOM that was
+ *     numbered before the file existed has R0001… on unrelated parts; in
+ *     that case Row IDs are only believed where the part also agrees.
  *  1. Tracker ID column (files exported from the tracker)
- *  2. sub-assembly + part no. (or description when there's no part no.).
- *     A part listed twice matches two tracker rows, so re-uploading the
- *     same file never grows the BOM.
+ *  2. sub-assembly code + part no. (or description when there's no part
+ *     no.). A part listed twice matches two tracker rows, so re-uploading
+ *     the same file never grows the BOM.
  *  3. same sub-assembly + description, part no. added or corrected since
- *  4. same part no. under a different sub-assembly (moved or the section
- *     was renamed) — only when it's unambiguous on both sides
+ *  4. same part no. under a different sub-assembly — only when it's
+ *     unambiguous on both sides
  *
  * For matched rows only non-empty cells are considered — a blank cell in
  * Excel never wipes data someone entered in the tracker. Engineering
@@ -608,9 +794,14 @@ const isBlank = (v: unknown) => v == null || v === "";
  * blanks and status only moves forward, unless `fileWins` is set.
  */
 export function planImport(parsed: ParsedBomRow[], existing: BomItem[], opts: ImportOptions = {}): ImportPlan {
-  const plan: ImportPlan = { inserts: [], updates: [], unchanged: 0, kept: [], rematched: [], missing: [], duplicates: [] };
+  const plan: ImportPlan = {
+    inserts: [], updates: [], unchanged: 0, kept: [], rematched: [], missing: [], duplicates: [],
+    rowIds: "none", rowIdClashes: 0,
+  };
   const sorted = [...existing].sort((a, b) => a.id - b.id);
   const byId = new Map(sorted.map((e) => [e.id, e]));
+  const byRowId = new Map<string, BomItem>();
+  for (const e of sorted) if (e.row_id) byRowId.set(e.row_id.trim().toUpperCase(), e);
   const claimed = new Set<number>();
   const hits: (BomItem | undefined)[] = new Array(parsed.length).fill(undefined);
   const claim = (i: number, e: BomItem) => { hits[i] = e; claimed.add(e.id); };
@@ -626,8 +817,27 @@ export function planImport(parsed: ParsedBomRow[], existing: BomItem[], opts: Im
     return m;
   };
 
+  // 0. Row ID
+  const idPairs: [number, BomItem][] = [];
+  const seenRowIds = new Set<string>();
+  parsed.forEach((row, i) => {
+    if (!row.row_id || seenRowIds.has(row.row_id)) return; // a copy-pasted row keeps its ID; only the first counts
+    seenRowIds.add(row.row_id);
+    const e = byRowId.get(row.row_id);
+    if (e) idPairs.push([i, e]);
+  });
+  if (idPairs.length) {
+    const agree = idPairs.filter(([i, e]) => looksLikeSamePart(parsed[i], e)).length;
+    const trusted = agree >= idPairs.length * 0.6;
+    plan.rowIds = trusted ? "trusted" : "mismatch";
+    for (const [i, e] of idPairs) {
+      if (trusted || looksLikeSamePart(parsed[i], e)) claim(i, e);
+    }
+  }
+
   // 1. Tracker ID
   parsed.forEach((row, i) => {
+    if (hits[i]) return;
     const e = row.tracker_id != null ? byId.get(row.tracker_id) : undefined;
     if (e && !claimed.has(e.id)) claim(i, e);
   });
@@ -663,26 +873,40 @@ export function planImport(parsed: ParsedBomRow[], existing: BomItem[], opts: Im
     }
   };
   const descKey = (r: { sub_assembly?: string | null; description?: string | null }) =>
-    r.description ? `${norm(r.sub_assembly ?? "")}|${norm(r.description)}` : null;
+    r.description ? `${subAssyKey(r.sub_assembly)}|${norm(r.description)}` : null;
   loose("part_no_changed", descKey, descKey);
   const pnKey = (r: { part_no?: string | null }) => (r.part_no?.trim() ? norm(r.part_no) : null);
   loose("moved", pnKey, pnKey);
 
   // Patches
+  const insertRowIds = new Set<string>();
   parsed.forEach((row, i) => {
     const hit = hits[i];
-    if (!hit) { plan.inserts.push(row); return; }
+    if (!hit) {
+      // The database keeps Row IDs unique per project and never changes one.
+      // Keep the file's ID on a new part only when nothing else holds it.
+      if (row.row_id && (byRowId.has(row.row_id) || insertRowIds.has(row.row_id))) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { row_id, ...rest } = row;
+        plan.inserts.push(rest);
+        plan.rowIdClashes += 1;
+      } else {
+        if (row.row_id) insertRowIds.add(row.row_id);
+        plan.inserts.push(row);
+      }
+      return;
+    }
     const patch: Partial<BomItem> = {};
     const changed: string[] = [];
     for (const [k, v] of Object.entries(row)) {
-      if (META.has(k) || v == null) continue;
+      if (NEVER_PATCHED.has(k) || v == null) continue;
       const cur = (hit as unknown as Record<string, unknown>)[k];
       if (sameValue(cur, v)) continue;
+      // "MH063-110-00" in the file vs "MH063-110-00 BASE & STRUCTURE" in the
+      // tracker: same sub-assembly, and the tracker's name says more.
+      if (k === "sub_assembly" && typeof cur === "string" && subAssyKey(cur) === subAssyKey(v as string) && cur.length >= (v as string).length) continue;
       if (!opts.fileWins && PROTECTED.has(k)) {
-        const allowed =
-          k === "status"
-            ? hit.status !== "cancelled" && (v === "cancelled" || STATUS_RANK[v as BomStatus] > STATUS_RANK[hit.status])
-            : isBlank(cur);
+        const allowed = k === "status" ? fileMayChangeStatus(hit.status, v as BomStatus) : isBlank(cur);
         if (!allowed) {
           plan.kept.push({ id: hit.id, field: k, fileValue: v, trackerValue: cur, row });
           continue;
@@ -691,14 +915,16 @@ export function planImport(parsed: ParsedBomRow[], existing: BomItem[], opts: Im
       (patch as Record<string, unknown>)[k] = v;
       changed.push(k);
     }
-    if (changed.length) plan.updates.push({ id: hit.id, patch, changed, row });
-    else plan.unchanged += 1;
+    if (changed.length) {
+      const orderSensitive = ORDERED_STATUSES.includes(hit.status) ? changed.filter((c) => ORDER_SENSITIVE.has(c)) : [];
+      plan.updates.push({ id: hit.id, patch, changed, row, orderSensitive });
+    } else plan.unchanged += 1;
   });
 
   // Parts the file dropped. Scoped to what the file covers, so uploading
   // only the mechanical BOM doesn't flag every electrical part as missing.
   if (parsed.length) {
-    const subAssys = new Set(parsed.map((r) => norm(r.sub_assembly ?? "")));
+    const subAssys = new Set(parsed.map((r) => subAssyKey(r.sub_assembly)));
     const disciplines = new Set(
       parsed.map((r) => r.discipline ?? r.discipline_hint ?? opts.defaultDiscipline).filter(Boolean) as BomDiscipline[]
     );
@@ -706,14 +932,14 @@ export function planImport(parsed: ParsedBomRow[], existing: BomItem[], opts: Im
       (e) =>
         !claimed.has(e.id) &&
         e.status !== "cancelled" &&
-        subAssys.has(norm(e.sub_assembly ?? "")) &&
+        subAssys.has(subAssyKey(e.sub_assembly)) &&
         (disciplines.size === 0 || disciplines.has(e.discipline))
     );
   }
 
   const seen = new Map<string, { label: string; rows: number[] }>();
   for (const row of parsed) {
-    const k = matchKey(row);
+    const k = `${row.source_sheet ?? ""}|${matchKey(row)}`;
     if (!seen.has(k)) seen.set(k, { label: row.part_no?.trim() || row.description || "", rows: [] });
     seen.get(k)!.rows.push(row.source_row);
   }

@@ -18,6 +18,7 @@ import { readBomFile } from "./bomExcel";
 
 function item(o: Partial<BomItem> & { id: number }): BomItem {
   return {
+    row_id: `R${String(o.id).padStart(4, "0")}`,
     project_id: "p", station_id: 1, sub_assembly: "120 SINGULATOR", discipline: "mechanical",
     description: "CYLINDER", part_no: "CDU16-25D", manufacturer: "SMC", category: null,
     qty: 2, multiple: 1, total_qty: 2, unit: "Pcs", make_buy: "buy", drawing_no: null,
@@ -146,13 +147,13 @@ describe("cells", () => {
 
 describe("parseBomRows on messy sheets", () => {
   it("reports what it left out instead of dropping it silently", () => {
-    const hm = mapHeaders(["Item", "Description", "Part No", "Qty", "ETA", "Status"]);
+    const hm = mapHeaders(["Item", "Description", "Part No", "Qty", "Maker", "Status"]);
     const { rows, skipped, issues } = parseBomRows(
       [
-        [1, "CYLINDER", "CDU16-25D", "2 pcs", "next week", "ask Ahmad"],
-        [2, null, "ZPT10", 4, null, null], // no description
+        [1, "CYLINDER", "CDU16-25D", "2 pcs", "SMC", "ask Ahmad"],
+        [2, null, null, 4, "SMC", null], // no description, no part no.
         [null, null, null, null, null, null],
-        [3, "VACUUM CUP", null, "TBC", "tbc", null], // placeholders: no warning
+        [3, "VACUUM CUP", null, "TBC", null, null], // placeholder: no warning
         [null, "TOTAL", null, 6, null, null],
       ],
       hm,
@@ -161,11 +162,77 @@ describe("parseBomRows on messy sheets", () => {
     );
     expect(rows.map((r) => r.description)).toEqual(["CYLINDER", "VACUUM CUP"]);
     expect(rows[0]).toMatchObject({ qty: 2, unit: "Pcs", source_sheet: "Mech" });
-    expect(rows[0].eta).toBeUndefined();
     expect(rows[0].status).toBeUndefined();
     expect(skipped).toBe(1);
-    expect(issues.map((i) => [i.row, i.kind])).toEqual([[2, "value"], [2, "value"], [3, "skipped"]]);
-    expect(issues[2].message).toContain("ZPT10");
+    expect(issues.map((i) => [i.row, i.kind])).toEqual([[2, "value"], [3, "skipped"]]);
+    expect(issues[0].message).toContain("ask Ahmad");
+  });
+  it("a fabricated part listed by drawing number alone is kept, named after the number", () => {
+    const hm = mapHeaders(["Sub-Assembly", "Description", "Manufacturer Part No.", "Qty / Set", "Make / Buy"]);
+    const { rows, skipped, issues } = parseBomRows(
+      [
+        ["MH063-240-00", null, "MH063-240-002", 2, "Make (Fabricate)"],
+        ["MH063-240-00", null, null, null, null], // dropdown picked, nothing typed: not a part, not a warning
+      ],
+      hm,
+      11
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ description: "MH063-240-002", part_no: "MH063-240-002", make_buy: "make" });
+    expect(skipped).toBe(0);
+    expect(issues.map((i) => i.kind)).toEqual(["note"]);
+  });
+  it("the same unreadable value on many rows is reported once", () => {
+    const hm = mapHeaders(["Description", "Part No", "Make / Buy"]);
+    const { issues } = parseBomRows([["A", "1", "Stock"], ["B", "2", "Stock"], ["C", "3", "stock"]], hm, 2);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ row: 2, kind: "value" });
+    expect(issues[0].message).toContain("3 rows");
+  });
+  it("purchasing's comment in the ETA column is kept in Remarks; a bracketed date is a date", () => {
+    const hm = mapHeaders(["Description", "Part No", "ETA", "Remarks"]);
+    const { rows, issues } = parseBomRows(
+      [
+        ["CYLINDER", "C-1", "15/10: 4 to 6 weeks - order from overseas", null],
+        ["CUP", "C-2", "14/10: lead time 4-5 weeks", "urgent"],
+        ["VALVE", "C-3", "(31/10/2026)", null],
+      ],
+      hm,
+      2
+    );
+    expect(rows[0]).toMatchObject({ remarks: "ETA: 15/10: 4 to 6 weeks - order from overseas" });
+    expect(rows[0].eta).toBeUndefined();
+    expect(rows[1].remarks).toBe("urgent · ETA: 14/10: lead time 4-5 weeks");
+    expect(rows[2]).toMatchObject({ eta: "2026-10-31" });
+    expect(issues.map((i) => i.kind)).toEqual(["note"]);
+  });
+  it("corrects dates Excel stored with day and month swapped", () => {
+    const hm = mapHeaders(["Description", "Part No", "PO Date", "Received Date", "Required Date"]);
+    const d = (y: number, m: number, day: number) => new Date(Date.UTC(y, m - 1, day));
+    const { rows, issues } = parseBomRows(
+      [
+        // typed 12/10/26 and 5/11/26 on a US-date PC → stored as 10 Dec and 11 May
+        ["A", "1", d(2026, 12, 10), d(2026, 5, 11), d(2026, 11, 4)],
+        ["B", "2", "28/10/26", "30/10/26", d(2026, 11, 18)],
+        ["C", "3", "16/10/2026", null, d(2026, 10, 28)],
+      ],
+      hm,
+      2
+    );
+    expect(rows[0]).toMatchObject({ po_date: "2026-10-12", received_date: "2026-11-05" });
+    // Required Date has real dates past the 12th, so the column was entered properly: untouched.
+    expect(rows[0].required_date).toBe("2026-11-04");
+    expect(issues.filter((i) => i.kind === "note")).toHaveLength(2);
+    expect(issues[0].message).toContain("10 Dec 2026 → 12 Oct 2026");
+  });
+  it("leaves real dates alone when they already sit with the typed ones", () => {
+    const hm = mapHeaders(["Description", "Part No", "Received Date"]);
+    const { rows } = parseBomRows(
+      [["A", "1", new Date(Date.UTC(2026, 10, 5))], ["B", "2", "30/10/26"]],
+      hm,
+      2
+    );
+    expect(rows[0].received_date).toBe("2026-11-05");
   });
   it("section titles: numbered, coded, or a lone label in another column", () => {
     const hm = mapHeaders(["Item", "Description", "Part No", "Qty"]);
@@ -307,12 +374,22 @@ describe("planImport — re-uploading must be safe", () => {
     expect(plan.updates[0].patch).toEqual({ status: "received", do_invoice_no: "DO-77", qty_received: 2 });
     expect(plan.kept).toHaveLength(0);
   });
-  it("a cancelled part is not revived, and Cancelled in the file is honoured", () => {
-    const revive = planImport([row({ description: "CYLINDER", part_no: "CDU16-25D", status: "finalized" })], [item({ id: 5, status: "cancelled" })]);
+  it("a cancelled part is not revived; the file can cancel only what nobody has ordered", () => {
+    const part = row({ description: "CYLINDER", part_no: "CDU16-25D" });
+    const revive = planImport([{ ...part, status: "finalized" }], [item({ id: 5, status: "cancelled" })]);
     expect(revive.updates).toHaveLength(0);
     expect(revive.kept).toHaveLength(1);
-    const cancel = planImport([row({ description: "CYLINDER", part_no: "CDU16-25D", status: "cancelled" })], [ordered]);
-    expect(cancel.updates[0].patch).toEqual({ status: "cancelled" });
+    const open = planImport([{ ...part, status: "cancelled" }], [item({ id: 5, status: "finalized" })]);
+    expect(open.updates[0].patch).toEqual({ status: "cancelled" });
+    const onOrder = planImport([{ ...part, status: "cancelled" }], [ordered]);
+    expect(onOrder.updates).toHaveLength(0);
+    expect(onOrder.kept[0]).toMatchObject({ field: "status", trackerValue: "purchased" });
+  });
+  it("flags engineering changes to a part that is already on order", () => {
+    const plan = planImport([row({ description: "CYLINDER", part_no: "CDU16-25D", qty: 4, remarks: "rev B" })], [ordered]);
+    expect(plan.updates[0].orderSensitive).toEqual(["qty"]);
+    const notYet = planImport([row({ description: "CYLINDER", part_no: "CDU16-25D", qty: 4 })], [item({ id: 5 })]);
+    expect(notYet.updates[0].orderSensitive).toEqual([]);
   });
   it("fileWins lets the file overwrite purchasing columns", () => {
     const plan = planImport([row({ description: "CYLINDER", part_no: "CDU16-25D", status: "finalized", supplier: "TBA" })], [ordered], { fileWins: true });
@@ -331,6 +408,65 @@ describe("planImport — re-uploading must be safe", () => {
     ];
     const plan = planImport([row({ description: "CYLINDER", part_no: "CDU16-25D", discipline: "mechanical" })], existing);
     expect(plan.missing.map((m) => m.id)).toEqual([2, 3]);
+  });
+});
+
+describe("Row IDs", () => {
+  const SA1 = "MH063-110-00";
+  it("match on Row ID even when the description and part no. were both rewritten", () => {
+    const existing = [
+      item({ id: 1, row_id: "R0001", sub_assembly: SA1, description: "Curtain Sensor", part_no: "BW20-32" }),
+      item({ id: 2, row_id: "R0002", sub_assembly: SA1, description: "Handle", part_no: "EP-0516" }),
+      item({ id: 3, row_id: "R0003", sub_assembly: SA1, description: "Lock", part_no: null }),
+    ];
+    const plan = planImport(
+      [
+        row({ row_id: "R0001", sub_assembly: SA1, description: "Curtain Sensor", part_no: "BW20-32" }),
+        row({ row_id: "R0002", sub_assembly: SA1, description: "Handle", part_no: "EP-0516" }),
+        row({ row_id: "R0003", sub_assembly: SA1, description: "Cam Lock", part_no: "CL-22" }),
+      ],
+      existing
+    );
+    expect(plan.rowIds).toBe("trusted");
+    expect(plan.inserts).toHaveLength(0);
+    expect(plan.updates).toHaveLength(1);
+    expect(plan.updates[0]).toMatchObject({ id: 3, patch: { description: "Cam Lock", part_no: "CL-22" } });
+  });
+  it("a tracker numbered before the file existed: Row IDs are not believed, parts match by content", () => {
+    // What the live MH063 project looks like today: R0001… sit on unrelated seed parts.
+    const existing = [
+      item({ id: 1, row_id: "R0001", sub_assembly: "MH063-110-00 BASE & STRUCTURE", description: "CASTER WHEEL", part_no: "WI-80F" }),
+      item({ id: 2, row_id: "R0002", sub_assembly: "MH063-110-00 BASE & STRUCTURE", description: "HANDLE", part_no: "C-UPCB120-214", station_id: null }),
+    ];
+    const plan = planImport(
+      [
+        row({ source_row: 11, row_id: "R0001", sub_assembly: SA1, description: "Curtain Sensor", part_no: "BW20-32" }),
+        row({ source_row: 12, row_id: "R0002", sub_assembly: SA1, description: "Bottom Drawer Handle", part_no: "EP-0516" }),
+        row({ source_row: 15, row_id: "R0005", sub_assembly: SA1, description: "Handle", part_no: "C-UPCB120-214" }),
+      ],
+      existing
+    );
+    expect(plan.rowIds).toBe("mismatch");
+    // Handle is found by sub-assembly code + part no.; its fuller sub-assembly name is kept.
+    expect(plan.updates).toEqual([expect.objectContaining({ id: 2, patch: { description: "Handle" } })]);
+    // The two new parts can't take R0001/R0002 — the seed parts hold them — so the database numbers them.
+    expect(plan.inserts.map((r) => [r.description, r.row_id])).toEqual([["Curtain Sensor", undefined], ["Bottom Drawer Handle", undefined]]);
+    expect(plan.rowIdClashes).toBe(2);
+    expect(plan.missing.map((m) => m.description)).toEqual(["CASTER WHEEL"]);
+  });
+  it("a new part keeps the file's Row ID; a copy-pasted row with the same ID gets a fresh one", () => {
+    const plan = planImport(
+      [
+        row({ row_id: "R0500", description: "NEW BRACKET", part_no: "B-9" }),
+        row({ row_id: "R0500", description: "NEW BRACKET COPY", part_no: "B-10" }),
+      ],
+      [item({ id: 1 })]
+    );
+    expect(plan.inserts.map((r) => r.row_id)).toEqual(["R0500", undefined]);
+  });
+  it("never tries to change a Row ID on an existing part", () => {
+    const plan = planImport([row({ row_id: "R0900", description: "CYLINDER", part_no: "CDU16-25D", qty: 9 })], [item({ id: 5 })]);
+    expect(plan.updates[0].patch).toEqual({ qty: 9 });
   });
 });
 

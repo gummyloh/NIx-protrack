@@ -120,6 +120,7 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
 
   const internal: Col[] = [
     { header: "Tracker ID", width: 9, group: "x", get: (i) => i.id },
+    { header: "Row ID", width: 9, group: "x", get: (i) => i.row_id },
     { header: "Item", width: 7, group: "x", get: (_, c) => c.itemNo },
     { header: "Module", width: 22, group: "E", get: (_, c) => c.module?.name ?? "" },
     { header: "Station", width: 26, group: "E", get: (_, c) => c.station?.name ?? "" },
@@ -184,7 +185,7 @@ export async function exportBomXlsx(a: ExportArgs): Promise<Blob> {
   ws.getCell("A3").value = `Exported ${today.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} from Nixtecs Project Tracker`;
   ws.getCell("A2").font = ws.getCell("A3").font = { name: "Arial", size: 9, italic: true, color: { argb: "FF595959" } };
   if (a.mode === "internal") {
-    ws.getCell("A4").value = "Keep the Tracker ID column when editing and re-importing — it's how rows are matched.";
+    ws.getCell("A4").value = "Keep the Tracker ID and Row ID columns when editing and re-importing — they're how rows are matched.";
     ws.getCell("A4").font = { name: "Arial", size: 9, color: { argb: "FFC00000" } };
   }
 
