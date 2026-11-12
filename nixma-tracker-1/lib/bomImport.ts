@@ -160,6 +160,7 @@ const MONTHS: Record<string, number> = {
 function ymd(y: number, m: number, d: number): string | null {
   if (y < 100) y += 2000;
   if (y < 1990 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  if (new Date(Date.UTC(y, m - 1, d)).getUTCDate() !== d) return null; // 31 Feb, 31 Apr …
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -947,6 +948,53 @@ export function planImport(parsed: ParsedBomRow[], existing: BomItem[], opts: Im
   plan.duplicates = [...seen.values()].filter((d) => d.rows.length > 1);
 
   return plan;
+}
+
+const INSERT_TEXT_COLS = [
+  "sub_assembly", "part_no", "manufacturer", "category", "drawing_no", "nsw_part_no", "engineer_pic",
+  "issue_date", "required_date", "supplier", "pr_no", "po_no", "po_date", "eta", "do_invoice_no",
+  "received_date", "issued_to", "issued_date", "remarks",
+] as const;
+const INSERT_NUM_COLS = ["qty", "qty_received", "qty_issued"] as const;
+
+/**
+ * The database row for a new part. Every column is spelled out on every row:
+ * a batch insert sends one column list for the whole batch, and a column
+ * missing from one row arrives as NULL — not as the column's default — which
+ * the required columns (Make / Buy, Unit, Status, Multiple) reject.
+ */
+export function toInsertPayload(
+  row: ParsedBomRow,
+  ctx: { projectId: string; stationId: number | null; defaultDiscipline: BomDiscipline; userId: string | null; sortOrder?: number | null }
+): Record<string, unknown> {
+  const r = row as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {
+    project_id: ctx.projectId,
+    station_id: ctx.stationId,
+    row_id: row.row_id ?? null, // null → the database assigns the next free R####
+    description: row.description,
+    discipline: row.discipline ?? row.discipline_hint ?? ctx.defaultDiscipline,
+    multiple: row.multiple ?? 1,
+    unit: row.unit ?? "Pcs",
+    make_buy: row.make_buy ?? "buy",
+    status: row.status ?? "not_finalized",
+    sort_order: ctx.sortOrder ?? null,
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
+  };
+  for (const k of INSERT_TEXT_COLS) out[k] = r[k] ?? null;
+  for (const k of INSERT_NUM_COLS) out[k] = r[k] ?? null;
+  return out;
+}
+
+/**
+ * Order to send new rows in: those bringing their own Row ID first. The
+ * database numbers a row without one as "highest so far + 1", so sending such
+ * a row early could hand it an ID that a later row in the same file carries.
+ * (Display order is unaffected — that follows sort_order.)
+ */
+export function insertOrder<T extends { row_id?: unknown }>(payloads: T[]): T[] {
+  return [...payloads.filter((p) => p.row_id), ...payloads.filter((p) => !p.row_id)];
 }
 
 /** Best-guess station for a sub-assembly name, by shared words. */
