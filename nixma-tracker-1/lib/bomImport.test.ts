@@ -142,6 +142,8 @@ describe("cells", () => {
     expect(normalizeUnit("Pair")).toBe("Pair");
     expect(parseMakeBuy("In-house")).toBe("make");
     expect(parseMakeBuy("Purchase")).toBe("buy");
+    expect(parseMakeBuy("Stock")).toBe("stock");
+    expect(parseMakeBuy("Ex-stock")).toBe("stock");
   });
 });
 
@@ -184,7 +186,7 @@ describe("parseBomRows on messy sheets", () => {
   });
   it("the same unreadable value on many rows is reported once", () => {
     const hm = mapHeaders(["Description", "Part No", "Make / Buy"]);
-    const { issues } = parseBomRows([["A", "1", "Stock"], ["B", "2", "Stock"], ["C", "3", "stock"]], hm, 2);
+    const { issues } = parseBomRows([["A", "1", "Loan"], ["B", "2", "Loan"], ["C", "3", "loan"]], hm, 2);
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({ row: 2, kind: "value" });
     expect(issues[0].message).toContain("3 rows");

@@ -56,6 +56,7 @@ export const BOM_MAKE_BUY_LABEL: Record<BomMakeBuy, string> = {
   buy: "Buy",
   make: "Make (Fabricate)",
   customer: "Customer Supplied",
+  stock: "From Stock",
 };
 
 export const BOM_CATEGORIES = [
@@ -145,7 +146,8 @@ export function bomFlags(item: FlagInput, today: string = todayIso()): BomFlag[]
   if (item.make_buy === "buy" && !item.part_no?.trim()) flags.push("NO_PART_NO");
   if (item.eta && !received && item.eta < today) flags.push("OVERDUE");
   if (item.eta && item.required_date && item.eta > item.required_date && !received) flags.push("LATE_VS_REQ");
-  if (item.status === "finalized" && !item.pr_no?.trim()) flags.push("NEED_PR");
+  // Parts taken from store stock are never requisitioned.
+  if (item.status === "finalized" && !item.pr_no?.trim() && item.make_buy !== "stock") flags.push("NEED_PR");
   if (item.qty_received != null && item.total_qty != null && item.qty_received < item.total_qty) flags.push("SHORT");
   if (item.station_id == null) flags.push("NO_STATION");
   return flags;

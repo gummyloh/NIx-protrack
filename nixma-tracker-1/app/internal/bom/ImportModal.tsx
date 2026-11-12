@@ -52,7 +52,10 @@ export default function ImportModal({
   const [busy, setBusy] = useState(false);
   const [defaultDiscipline, setDefaultDiscipline] = useState<BomDiscipline>("mechanical");
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [fileWins, setFileWins] = useState(false);
+  // Purchasing still keeps Status / PO / ETA in the Excel, so by default a
+  // re-upload takes those columns from the file. Untick to protect what's in
+  // the tracker once purchasing works here instead.
+  const [fileWins, setFileWins] = useState(true);
   const [cancelMissing, setCancelMissing] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
 
@@ -67,7 +70,7 @@ export default function ImportModal({
   const groupOf = (r: ParsedBomRow) => (r.station_name || r.sub_assembly || "(no sub-assembly)").trim();
 
   async function onPick(f: File | null) {
-    setFile(f); setRead(null); setError(null); setCancelMissing(false); setFileWins(false);
+    setFile(f); setRead(null); setError(null); setCancelMissing(false); setFileWins(true);
     if (!f) return;
     setBusy(true);
     try {
@@ -410,8 +413,10 @@ export default function ImportModal({
                   <label className="flex items-start gap-2">
                     <input type="checkbox" className="mt-0.5" checked={fileWins} disabled={busy} onChange={(e) => setFileWins(e.target.checked)} />
                     <span>
-                      Use the file&apos;s Status, Supplier, PR/PO, ETA and received/issued columns instead.
-                      <span className="text-[var(--ink)]/50"> Only tick this if this file is where purchasing was last updated.</span>
+                      Take Status, Supplier, PR/PO, ETA and received/issued columns from this file.
+                      <span className="text-[var(--ink)]/50">
+                        {" "}Right while purchasing is updated in the Excel. Untick to keep what&apos;s in the tracker — the file then only fills blanks and moves status forward.
+                      </span>
                     </span>
                   </label>
                 </div>

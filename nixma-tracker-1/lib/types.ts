@@ -338,7 +338,7 @@ export type BomStatus =
   | 'not_finalized' | 'finalized' | 'purchased' | 'received'
   | 'nsw_purchased' | 'nsw_requested' | 'cancelled';
 export type BomDiscipline = 'mechanical' | 'electrical' | 'pneumatic' | 'software' | 'others';
-export type BomMakeBuy = 'buy' | 'make' | 'customer';
+export type BomMakeBuy = 'buy' | 'make' | 'customer' | 'stock';
 
 export interface BomItem {
   id: number;

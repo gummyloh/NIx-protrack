@@ -148,6 +148,7 @@ export function parseMakeBuy(v: string | null | undefined): BomMakeBuy | null {
   const n = norm(v);
   if (n.startsWith("make") || n.includes("fabric") || n === "inhouse") return "make";
   if (n.startsWith("cust") || n === "fis" || n.includes("freeissue")) return "customer";
+  if (n.includes("stock") || n === "store" || n === "fromstore") return "stock";
   if (n.startsWith("buy") || n.startsWith("purchase") || n === "standard" || n === "std") return "buy";
   return null;
 }
@@ -451,7 +452,7 @@ export function parseBomRows(
         case "make_buy": {
           const m = parseMakeBuy(text);
           if (m) out.make_buy = m;
-          else unread("isn't Make / Buy / Customer, left as it is");
+          else unread("isn't Make / Buy / Customer / Stock, left as it is");
           break;
         }
         case "unit":
